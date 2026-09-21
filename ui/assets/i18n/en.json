@@ -1,54 +1,164 @@
 {
     "app": { "title": "AfricAIsoft Portable Studio" },
     "tagline": "Local & confidential AI assistant",
-    "lang": { "label": "Interface language" },
+    "lang":   { "label": "Interface language" },
+    "theme":  { "toggle": "Toggle light/dark theme" },
     "health": { "tooltip": "Stack health" },
-    "badge": {
-        "ok": "OK",
-        "partial": "PARTIAL",
-        "error": "DOWN",
-        "unknown": "…"
+    "badge":  { "ok": "OK", "partial": "PARTIAL", "error": "DOWN", "unknown": "…" },
+
+    "conversations": {
+        "title": "Conversations",
+        "new": "New conversation",
+        "stored": "stored locally",
+        "confirmDelete": "Delete this conversation permanently?",
+        "renamePrompt": "New title:",
+        "empty": "No conversations. Click ＋ to start.",
+        "loadFailed": "Could not load conversations"
     },
-    "platform": {
-        "title": "Platform",
-        "os": "System",
-        "backend": "Backend",
-        "version": "Version",
-        "auth": "Authentication",
-        "authOn": "enabled",
-        "authOff": "disabled",
-        "mcp": "MCP"
-    },
-    "backend_reason": {
-        "metal_native": "Native macOS (Metal)",
-        "cuda_found": "NVIDIA GPU detected ({gpu})",
-        "rocm_found": "AMD GPU detected (ROCm)",
-        "vulkan_found": "Vulkan GPU detected",
-        "no_gpu_detected": "No usable GPU detected",
-        "forced_by_config": "Forced by config ({backend})",
-        "forced_binary_missing": "Forced binary missing: {path}",
-        "metal_binary_missing": "Metal binary missing"
-    },
-    "sysprompt": {
-        "title": "System prompt",
-        "locked": "Locked by administrator",
-        "tokens": "tokens (approx.)",
-        "source": "source:",
-        "sourceLocked": "locked",
-        "placeholder": "Loading...",
-        "save": "Save",
-        "saved": "Saved",
-        "reset": "Default",
-        "confirmReset": "Restore the default system prompt?"
-    },
+
     "chat": {
-        "placeholder": "Type your message...",
+        "untitled": "New conversation",
+        "placeholder": "Type your message... (Enter = send, Shift+Enter = new line)",
         "send": "Send",
         "idle": "Ready",
         "streaming": "Generating...",
-        "modelLabel": "Model:"
+        "inferring": "Inferring...",
+        "waiting": "Waiting for model...",
+        "loadingModel": "Loading model...",
+        "toolExecuting": "Executing tools...",
+        "modelLabel": "Model:",
+        "rename": "Rename conversation",
+        "delete": "Delete conversation",
+        "welcome": "Welcome. Select or create a conversation to begin.",
+        "toolsCount": "tool(s)",
+        "traceToggle": "Agentic trace",
+        "trace": {
+            "round":         "Round",
+            "toolsOffered":  "tool(s) offered",
+            "toolCalls":     "Tool call(s)",
+            "toolResults":   "Tool result(s)",
+            "final":         "Final response",
+            "fallbackParse": "JSON fallback",
+            "timeout":       "Timeout",
+            "maxRounds":     "Rounds exhausted",
+            "close":         "Session end"
+        }
     },
+
+    "tabs": {
+        "skills":       "Skills",
+        "models":       "Models",
+        "systemprompt": "System prompt",
+        "config":       "Config"
+    },
+
+    "skills": {
+        "title": "MCP tools",
+        "status": { "running": "active", "unavailable": "unavailable",
+                    "crashed": "crashed", "stopped": "stopped", "starting": "starting" },
+        "noTools": "No tools detected.",
+        "loadError": "Cannot load skills."
+    },
+
+    "rag": {
+        "title":   "Knowledge base (RAG)",
+        "reindex": "Reindex",
+        "reindexing": "Reindexing...",
+        "reindexed":  "Reindexed.",
+        "docsCount":  "document(s) indexed",
+        "indexAge":   "Index updated:",
+        "noDocs":     "No documents indexed.",
+        "dropHere":   "Drop .txt / .md / .pdf files into mcp-servers/rag/knowledge/documents/"
+    },
+
+    "models": {
+        "title":    "Available models",
+        "refresh":  "Refresh",
+        "size":     "Size",
+        "date":     "Date",
+        "quant":    "Quant.",
+        "params":   "Parameters",
+        "switch":   "Switch",
+        "active":   "Active",
+        "switching":"Switching…",
+        "switched": "Model switched",
+        "switchFailed":"Switch failed",
+        "hint":     "Switching unloads the current model and loads the new one (~5-30 s depending on size).",
+        "confirmSwitch": "Switch to this model? Any in-flight requests will be interrupted."
+    },
+
+    "platform": {
+        "title":    "Platform",
+        "os":       "System",
+        "backend":  "Backend",
+        "version":  "Version",
+        "auth":     "Authentication",
+        "authOn":   "enabled",
+        "authOff":  "disabled",
+        "mcp":      "MCP"
+    },
+
+    "backend_reason": {
+        "metal_native":        "Native macOS (Metal)",
+        "cuda_found":          "NVIDIA GPU detected ({gpu})",
+        "rocm_found":          "AMD GPU detected (ROCm)",
+        "vulkan_found":        "Vulkan GPU detected",
+        "no_gpu_detected":     "No usable GPU detected",
+        "forced_by_config":    "Forced by config ({backend})",
+        "forced_binary_missing":"Forced binary missing: {path}",
+        "metal_binary_missing":"Metal binary missing"
+    },
+
+    "sysprompt": {
+        "title":      "Active system prompt",
+        "locked":     "Locked by administrator — read only",
+        "tokens":     "tokens (approx.)",
+        "source":     "source:",
+        "sourceLocked":"locked",
+        "placeholder":"Loading...",
+        "save":       "Save",
+        "saved":      "Saved",
+        "reset":      "Vendor default",
+        "confirmReset":"Restore the default system prompt?",
+        "presets":    "Presets:",
+        "presetActivated":"Preset activated"
+    },
+
+    "config": {
+        "title":    "Non-sensitive parameters",
+        "save":     "Save",
+        "saved":    "Saved",
+        "reload":   "Reload",
+        "requiresRestart":"Some changes require restarting the studio to take effect.",
+        "invalid":  "Invalid value",
+        "perfTitle":"Status & performance",
+        "perf": {
+            "llamaStatus":  "llama-server status",
+            "mcpStatus":    "MCP status",
+            "authStatus":   "Authentication",
+            "modelActive":  "Active model",
+            "contextSize":  "Context",
+            "backend":      "Backend"
+        },
+        "fields": {
+            "server.port":          "HTTP port (studio)",
+            "server.bind_host":     "Bind address",
+            "model.context_size":   "Model context (tokens)",
+            "model.gpu_layers":     "GPU layers",
+            "model.threads":        "Threads",
+            "agentic.max_tool_rounds":"Max tool rounds",
+            "agentic.total_timeout":  "Total timeout (s)",
+            "agentic.allow_parallel_tools":"Parallel tools",
+            "server.cors.allow_credentials":"CORS credentials",
+            "ui.default_language":  "Default language",
+            "ui.theme":             "Theme"
+        }
+    },
+
     "errors": {
-        "saveFailed": "Save failed"
+        "saveFailed":    "Save failed",
+        "network":       "Network error",
+        "notReady":      "Model not ready yet",
+        "generic":       "Error"
     }
 }

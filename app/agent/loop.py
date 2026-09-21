@@ -34,20 +34,33 @@ class AgentLoop:
         self.total_timeout = total_timeout
         self.allow_parallel = allow_parallel
 
-    async def run(self, payload: dict, extra_tools: Optional[list[dict]] = None,
+    async def run(self, payload: dict,
+                  client_tools: Optional[list[dict]] = None,
+                  auto_inject_mcp: bool = True,
                   session_id: Optional[str] = None) -> dict:
         """
         Exécute une conversation agentique complète.
+
         Retourne un dict au format OpenAI /v1/chat/completions avec un champ
         supplémentaire `metadata.trace` contenant tous les événements.
+
+        Paramètres :
+          - client_tools : liste d'outils fournie explicitement par le client.
+                           Si non vide, ce sont ces outils qui sont exposés au
+                           modèle (pas d'injection MCP).
+          - auto_inject_mcp : si True et client_tools est None, tous les outils
+                              MCP du registre sont injectés automatiquement.
         """
         session_id = session_id or new_session_id()
         BUS.emit(session_id, "start", {"max_rounds": self.max_rounds})
 
-        # Fusion des outils : outils MCP registrés + outils fournis par le client.
-        all_tools = list(self.registry.all_openai_tools())
-        if extra_tools:
-            all_tools.extend(extra_tools)
+        # Sélection des outils exposés au modèle selon la stratégie choisie.
+        if client_tools:
+            all_tools = list(client_tools)
+        elif auto_inject_mcp:
+            all_tools = list(self.registry.all_openai_tools())
+        else:
+            all_tools = []
 
         messages = list(payload.get("messages", []))
         tool_choice = payload.get("tool_choice", "auto")

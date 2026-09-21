@@ -39,11 +39,31 @@ def build_v1_router() -> APIRouter:
                     "created": int(p.stat().st_mtime),
                     "owned_by": "local",
                     "size_bytes": p.stat().st_size,
-                    "context_length": request.app.state.settings.model.context_length,
+                    "context_size": request.app.state.settings.model.context_size,
                 })
         return {"object": "list", "data": items}
 
-    @router.post("/chat/completions", summary="Complétion chat (OpenAI-compat)")
+    @router.post(
+        "/chat/completions",
+        summary="Complétion chat (OpenAI-compat)",
+        description=(
+            "Proxy OpenAI-compatible vers `llama-server` en loopback.\n\n"
+            "**Comportement auto-injection des tools MCP (Phase 3)** :\n"
+            "- Si le champ `tools` est **absent ou vide** et `tool_choice != \"none\"`, "
+            "l'orchestrateur injecte automatiquement tous les outils MCP découverts "
+            "(cybersec, accounting, rag, general) au format function calling.\n"
+            "- Si le client fournit explicitement `tools: [...]`, **SA liste est "
+            "utilisée telle quelle** (aucune injection MCP). L'orchestrateur retrouve "
+            "malgré tout les skills MCP correspondants par nom préfixé (`<skill>__<tool>`) "
+            "lors de l'exécution ; les autres noms sont retournés au modèle en `error`.\n"
+            "- Si `tool_choice == \"none\"`, aucun tool n'est jamais offert.\n\n"
+            "**Override du context au niveau requête** : le champ `context_size` "
+            "(int, optionnel) est passé tel quel à llama-server (borné par la valeur "
+            "chargée en mémoire au démarrage — un override supérieur est ignoré).\n\n"
+            "Streaming SSE supporté (`stream: true`). Voir aussi `/api/events` pour la "
+            "trace agentique parallèle."
+        ),
+    )
     async def chat_completions(request: Request):
         """Proxy vers llama-server /v1/chat/completions avec system prompt injecté."""
         try:
@@ -102,11 +122,28 @@ def build_v1_router() -> APIRouter:
             )
 
         # ── Boucle agentique si tools présents ou tool_choice explicite ─────
+        # Correctif Phase 3 : si le client fournit explicitement `tools: [...]`,
+        # on respecte SA liste (pas d'injection MCP). Auto-injection MCP
+        # uniquement quand `tool_choice` est explicite (auto/required/function).
+        # Sans tools ni tool_choice → chat classique (streaming préservé).
         registry = getattr(request.app.state, "mcp", None)
         request_tools = payload.get("tools")
-        wants_agent = (registry is not None
-                       and (request_tools
-                            or payload.get("tool_choice") not in (None, "none")))
+        client_specified_tools = isinstance(request_tools, list) and len(request_tools) > 0
+        tool_choice = payload.get("tool_choice")
+        # tool_choice="none" → jamais de boucle agentique.
+        if tool_choice == "none":
+            wants_agent = False
+        elif client_specified_tools:
+            # Le client a explicité ses outils → on entre en boucle sans injecter les MCP.
+            wants_agent = True
+        elif tool_choice is not None:
+            # tool_choice explicite (auto / required / {function}) → on autorise
+            # l'injection MCP par défaut.
+            wants_agent = (registry is not None
+                           and bool(registry.all_openai_tools()))
+        else:
+            # Ni tools ni tool_choice → chat classique, aucune injection.
+            wants_agent = False
         if wants_agent and not stream:
             from app.agent.loop import AgentLoop
             settings_obj = request.app.state.settings
@@ -117,8 +154,13 @@ def build_v1_router() -> APIRouter:
                 total_timeout=float(settings_obj.agentic.total_timeout),
                 allow_parallel=settings_obj.agentic.allow_parallel_tools,
             )
-            result = await loop.run(payload,
-                                    extra_tools=request_tools if isinstance(request_tools, list) else None)
+            # Si client_specified_tools : on passe ses outils à la boucle
+            # SANS ajouter les MCP. Sinon on injecte les MCP automatiquement.
+            result = await loop.run(
+                payload,
+                client_tools=request_tools if client_specified_tools else None,
+                auto_inject_mcp=not client_specified_tools,
+            )
             return JSONResponse(content=result)
 
         if stream:

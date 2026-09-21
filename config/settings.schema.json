@@ -39,7 +39,7 @@
       "additionalProperties": false,
       "properties": {
         "path": {"type": ["string", "null"]},
-        "context_length": {"type": "integer", "minimum": 128},
+        "context_size": {"type": "integer", "minimum": 128, "maximum": 131072},
         "threads": {"type": ["integer", "null"], "minimum": 1},
         "gpu_layers": {"type": ["integer", "null"], "minimum": 0}
       }

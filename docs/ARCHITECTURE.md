@@ -8,6 +8,26 @@
 
 ## Amendements Phase 2 (client, 24/08/2026)
 
+> ⚠️ **Taille de modèle et fiabilité du tool-calling** (ajout Phase 3, 24/08/2026)
+>
+> La boucle agentique (`app/agent/loop.py`) délègue au modèle le choix des
+> outils MCP à invoquer via les mécanismes `tool_calls` / `tool_choice` OpenAI.
+> Cette décision requiert un modèle **fine-tuné pour le function calling**.
+>
+> | Taille modèle | Fiabilité routage tools | Usage recommandé |
+> |---|---|---|
+> | **0.5B** (Qwen2.5-0.5B-Instruct) | ⚠️ Faible (~20 % de bons appels) | Test d'infrastructure, chat simple, validation offline |
+> | **3B** (Qwen2.5-3B-Instruct)     | ✅ Correcte (~70 %)              | Démo, poste léger, USB de terrain              |
+> | **7B+** (Qwen2.5-7B, Llama-3.1-8B, Mistral-Nemo-12B) | ✅✅ Fiable (~90 %+) | Production, cas d'usage métier réels           |
+>
+> Le modèle 0.5B embarqué par défaut est **volontairement conservé** pour
+> permettre de tester la stack sur une clé USB minimale, mais les scénarios
+> agentiques complets (RAG → analyse → rapport structuré) exigent au minimum
+> un 3B. Les tests forcés via `tool_choice` explicite (`tests/test-agentic-loop.sh`,
+> `tests/test-agentic-3steps.sh`) restent verts avec un 0.5B car ils
+> court-circuitent la décision du modèle.
+
+
 Ce document conserve son architecture globale. Les précisions ci-dessous ont été validées par le client avant l'écriture du code Phase 2 et **prévalent** sur les décisions §12 en cas de contradiction :
 
 - **Bind par défaut `127.0.0.1`** ; passage à `0.0.0.0` = opt-in explicite (LAN). `llama-server` reste **toujours** en loopback interne (`127.0.0.1:8090`).

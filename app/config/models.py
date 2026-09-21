@@ -45,7 +45,10 @@ class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # null = auto-sélection (le plus gros .gguf de models/).
     path: Optional[str] = None
-    context_length: int = 4096
+    # Contexte par défaut porté à 8192 (Phase 3 correctifs) ; override
+    # possible par requête via le champ `context_size` du payload
+    # /v1/chat/completions (passé tel quel à llama-server).
+    context_size: int = 8192
     threads: Optional[int] = None  # null = n_cores - 1
     gpu_layers: Optional[int] = None  # null = auto (dépend backend)
 

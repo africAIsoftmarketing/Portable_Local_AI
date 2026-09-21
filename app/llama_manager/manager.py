@@ -67,7 +67,7 @@ class LlamaManager:
         cmd = [
             str(binary),
             "-m", str(model),
-            "-c", str(self.settings.model.context_length),
+            "-c", str(self.settings.model.context_size),
             "-t", str(threads),
             "--host", self.host,
             "--port", str(self.port),
@@ -144,6 +144,22 @@ class LlamaManager:
         self._clear_pid()
         logger.info("llama-server arrêté.")
 
+    async def reload_model(self) -> None:
+        """Bascule vers un autre modèle : stop propre puis re-start.
+
+        Le nouveau chemin doit être positionné dans self.settings.model.path
+        avant d'appeler cette méthode (via ConfigLoader.save_settings).
+        """
+        logger.info("Rechargement du modèle demandé (path=%s)...",
+                    self.settings.model.path)
+        await self.stop()
+        # Recharge fraîche des settings (par sécurité, en cas d'édition externe).
+        from app.config.loader import load_settings
+        self.settings = load_settings(force_reload=True)
+        await self.start()
+        logger.info("Rechargement terminé (modèle=%s).",
+                    self.model_path.name if self.model_path else "?")
+
     async def health(self) -> dict:
         """Statut runtime (retourné par /health de l'orchestrateur)."""
         if not self.proc or self.proc.returncode is not None:
@@ -158,7 +174,7 @@ class LlamaManager:
                 "status": "ok" if r.status_code == 200 else "unhealthy",
                 "http_status": r.status_code,
                 "model": self.model_path.name if self.model_path else None,
-                "context_length": self.settings.model.context_length,
+                "context_size": self.settings.model.context_size,
                 "backend": self.backend["backend"],
                 "upstream": body,
             }

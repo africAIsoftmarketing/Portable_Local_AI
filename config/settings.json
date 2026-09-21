@@ -30,7 +30,7 @@
   },
   "model": {
     "path": null,
-    "context_length": 4096,
+    "context_size": 8192,
     "threads": null,
     "gpu_layers": null
   },

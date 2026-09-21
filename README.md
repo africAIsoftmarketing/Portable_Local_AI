@@ -11,6 +11,18 @@ PortableAI wraps [llama.cpp](https://github.com/ggml-org/llama.cpp)'s `llama-ser
 
 No Python environment. No package managers. No GPU required.
 
+> ⚠️ **Note sur la taille des modèles / Note on model size** — La boucle agentique
+> (tool-calling MCP) exige un modèle capable de choisir seul les bons outils.
+> Le modèle de démonstration **Qwen2.5-0.5B** embarqué n'est **PAS** suffisant
+> pour un routage tool-calling fiable ; il valide la mécanique mais choisit
+> mal ses outils. **Recommandations** :
+> - **Démo / poste léger** : Qwen2.5-3B-Instruct (Q4_K_M, ~2 Go). Décisions
+>   correctes ~70 % du temps.
+> - **Production** : Qwen2.5-7B-Instruct, Llama-3.1-8B-Instruct, Mistral-Nemo-12B
+>   (Q4_K_M / Q5_K_M). Décisions fiables ~90 %+ et rapports structurés soignés.
+> Un 0.5B reste utile pour tester l'infrastructure et pour du chat basique
+> sans outils.
+
 ---
 
 ## Features
