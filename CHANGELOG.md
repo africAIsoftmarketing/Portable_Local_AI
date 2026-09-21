@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## [1.0.1] Sécurité pré-push — audit GitHub Secret Scanning — 2026-09-21
+
+### Corrigé
+- **Audit sécurité exhaustif** avant push initial :
+  - Scan HEAD + historique complet (`git rev-list --all`) : **aucun secret**
+    trouvé (pas de `BEGIN PRIVATE KEY`, ni `sk-*`, ni `AKIA*`, ni JWT `eyJ*`,
+    ni chaîne base64url ≥ 32 caractères en dehors des SHA512 NuGet
+    strictement contenus dans `keybuilder/**/bin,obj/` déjà `git rm --cached`).
+  - Confirmé : `config/api_key.txt` et `keys/private.pem` n'ont jamais été
+    introduits dans un commit (`git log --all --diff-filter=A` vide).
+- **`.gitignore` renforcé** :
+  - `config/settings.json` (fichier utilisateur — peut contenir CORS internes,
+    chemins de modèles privés, overrides auth).
+  - `data/conversations.json` (contenu utilisateur runtime).
+  - Ces deux fichiers retirés du tracking (`git rm --cached`) — leurs valeurs
+    initiales restent versionnées dans `config/settings.example.json` et
+    `data/pids/.gitkeep`.
+  - Déjà présents : `config/api_key.txt`, `keys/private.pem`, `logs/*.log`,
+    `memory/`, `*.pem`, `*.key`, `.env*`, `credentials.json`.
+- **`config/settings.example.json`** créé : template neutre versionné dont
+  l'orchestrateur copie automatiquement le contenu dans `settings.json` au
+  premier lancement (`app/config/loader.py`), sans valeurs sensibles.
+- **`memory/test_credentials.md`** retiré du tracking (memory/ gitignored).
+
+### Documenté
+- Aucun secret n'a été purgé de l'historique **parce qu'aucun n'y figurait**.
+  L'audit `git log -p --all -S` sur tous les patterns sensibles renvoie vide.
+  Le premier `git push` peut donc procéder sans réécriture d'historique.
+
+---
+
 ## [1.0.0] Livrable final — Phase 6 finalisation — 2026-08-24
 
 ### Ajouté

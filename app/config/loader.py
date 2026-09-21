@@ -32,18 +32,35 @@ def _config_file() -> Path:
 
 
 def load_settings(force_reload: bool = False) -> Settings:
-    """Charge et valide settings.json. Cache le résultat sauf force_reload=True."""
+    """Charge et valide settings.json. Cache le résultat sauf force_reload=True.
+
+    Si settings.json est absent, tente de le créer depuis settings.example.json
+    (fichier livré avec la distribution). Ce mécanisme garantit qu'aucune
+    configuration utilisateur (potentiellement sensible) n'est versionnée dans
+    git, tout en fournissant un template de démarrage.
+    """
     key = str(_config_file())
     with _cache_lock:
         if not force_reload and key in _cache:
             return _cache[key]
 
         cfg_path = _config_file()
+        example_path = cfg_path.parent / "settings.example.json"
         if not cfg_path.exists():
-            logger.warning("config/settings.json absent, valeurs par défaut appliquées.")
-            settings = Settings()
-            _cache[key] = settings
-            return settings
+            if example_path.exists():
+                logger.info(
+                    "config/settings.json absent : création depuis "
+                    "settings.example.json (première utilisation)."
+                )
+                cfg_path.write_bytes(example_path.read_bytes())
+            else:
+                logger.warning(
+                    "config/settings.json et settings.example.json absents, "
+                    "valeurs par défaut appliquées."
+                )
+                settings = Settings()
+                _cache[key] = settings
+                return settings
 
         try:
             raw = json.loads(cfg_path.read_text(encoding="utf-8"))

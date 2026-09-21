@@ -22,11 +22,17 @@ logs/*.log
 logs/*.log.*
 data/pids/*.pid
 data/pids/*.json
+# Conversations utilisateur (créées au runtime) — jamais commiter (peut
+# contenir des données sensibles saisies par l'opérateur/utilisateur final).
+data/conversations.json
 
 # Cache de téléchargement local
 .cache/
 
-# Configuration utilisateur (créée au 1er lancement)
+# Configuration utilisateur (créée au 1er lancement depuis settings.example.json).
+# NE JAMAIS COMMITER settings.json : peut contenir des origines CORS internes,
+# des chemins de modèles privés, ou des overrides d'auth.
+config/settings.json
 config/api_key.txt
 config/system_prompt.txt
 
