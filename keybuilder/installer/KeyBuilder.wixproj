@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Rôle    : projet WiX v4 pour le MSI Key Builder.
+               Le fichier .msi est généré côté client via `dotnet build`
+               après `dotnet publish` de l'app WPF. Ce projet ne compile
+               pas sous Linux (WiX toolset Windows-only).
+     Auteur  : AfricAIsoft — Licence : MIT — Date : 2026-08-24
+     ═══════════════════════════════════════════════════════════════════════ -->
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <OutputName>AfricAIsoft.KeyBuilder-Setup</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\src\AfricAIsoft.KeyBuilder.Wpf\AfricAIsoft.KeyBuilder.Wpf.csproj">
+      <Name>AfricAIsoft.KeyBuilder.Wpf</Name>
+      <Private>True</Private>
+      <DoNotHarvest>False</DoNotHarvest>
+    </ProjectReference>
+  </ItemGroup>
+</Project>

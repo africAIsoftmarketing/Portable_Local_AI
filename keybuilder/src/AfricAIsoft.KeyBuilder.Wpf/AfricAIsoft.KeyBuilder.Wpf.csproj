@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Rôle    : application WPF Windows du Key Builder (front-end natif).
+                 Compile UNIQUEMENT sous Windows (net8.0-windows + UseWPF).
+                 Sous Linux / CI Linux : ce projet n'est pas construit.
+       Auteur  : AfricAIsoft
+       Licence : MIT
+       Date    : 2026-08-24
+       ═══════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>AfricAIsoft.KeyBuilder</AssemblyName>
+    <RootNamespace>AfricAIsoft.KeyBuilder.Wpf</RootNamespace>
+    <Version>0.5.0</Version>
+    <Authors>AfricAIsoft</Authors>
+    <ProductName>AfricAIsoft Key Builder</ProductName>
+    <ApplicationIcon>Assets\keybuilder.ico</ApplicationIcon>
+    <NeutralLanguage>fr-FR</NeutralLanguage>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AfricAIsoft.KeyBuilder.Core\AfricAIsoft.KeyBuilder.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Properties\Resources.en-US.resx" />
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Assets\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

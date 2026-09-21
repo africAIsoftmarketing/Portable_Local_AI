@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Product.wxs — définition MSI (WiX v4 syntax). -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="AfricAIsoft Key Builder"
+           Manufacturer="AfricAIsoft"
+           Version="0.5.0"
+           UpgradeCode="6a1c3d5e-7b8a-4f9b-9c2d-af1234567890"
+           Scope="perMachine">
+    <MediaTemplate EmbedCab="yes" />
+    <MajorUpgrade DowngradeErrorMessage="Une version plus récente est déjà installée." />
+
+    <Feature Id="Main" Title="AfricAIsoft Key Builder" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="AfricAIsoft Key Builder" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="e9b1c2d3-4a5b-6c7d-8e9f-0a1b2c3d4e5f">
+        <Shortcut Id="AppShortcut"
+                  Name="AfricAIsoft Key Builder"
+                  Description="Fabrique des clés USB portables AfricAIsoft"
+                  Target="[INSTALLFOLDER]AfricAIsoft.KeyBuilder.exe"
+                  WorkingDirectory="INSTALLFOLDER"/>
+        <RegistryValue Root="HKCU"
+                       Key="Software\AfricAIsoft\KeyBuilder"
+                       Name="Installed"
+                       Type="integer" Value="1" KeyPath="yes"/>
+      </Component>
+    </StandardDirectory>
+
+    <ComponentGroup Id="AppComponents" Directory="INSTALLFOLDER">
+      <!-- Harvest via HeatDirectory ou déclaration manuelle des fichiers
+           publiés (à compléter côté client selon output de `dotnet publish`). -->
+      <Files Include="!(bindpath.PublishDir)\**" />
+    </ComponentGroup>
+  </Package>
+</Wix>

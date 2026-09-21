@@ -1,0 +1,15 @@
+<Application x:Class="AfricAIsoft.KeyBuilder.Wpf.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <SolidColorBrush x:Key="Bg"       Color="#F6F2EA"/>
+            <SolidColorBrush x:Key="Ink"      Color="#23241F"/>
+            <SolidColorBrush x:Key="Accent"   Color="#2F5C3A"/>
+            <SolidColorBrush x:Key="Border"   Color="#D9D3C4"/>
+            <FontFamily      x:Key="Serif">Georgia, Palatino Linotype, Palatino</FontFamily>
+            <FontFamily      x:Key="Mono">Consolas, Cascadia Mono, Menlo</FontFamily>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

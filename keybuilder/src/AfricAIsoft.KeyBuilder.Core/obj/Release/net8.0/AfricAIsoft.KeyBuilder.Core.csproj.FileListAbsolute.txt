@@ -1,0 +1,12 @@
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/bin/Release/net8.0/AfricAIsoft.KeyBuilder.Core.deps.json
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/bin/Release/net8.0/AfricAIsoft.KeyBuilder.Core.dll
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/bin/Release/net8.0/AfricAIsoft.KeyBuilder.Core.pdb
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/AfricAIsoft.KeyBuilder.Core.GeneratedMSBuildEditorConfig.editorconfig
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/AfricAIsoft.KeyBuilder.Core.AssemblyInfoInputs.cache
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/AfricAIsoft.KeyBuilder.Core.AssemblyInfo.cs
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/AfricAIsoft.KeyBuilder.Core.csproj.CoreCompileInputs.cache
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/AfricAIsoft.KeyBuilder.Core.sourcelink.json
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/AfricAIsoft.KeyBuilder.Core.dll
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/refint/AfricAIsoft.KeyBuilder.Core.dll
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/AfricAIsoft.KeyBuilder.Core.pdb
+/app/keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/ref/AfricAIsoft.KeyBuilder.Core.dll

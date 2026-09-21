@@ -1,0 +1,35 @@
+{
+  "_comment": "Exemple de configuration batch — chaque entrée = une clé à produire.",
+  "source_root": "C:\\Program Files\\AfricAIsoft\\Portable_Local_AI",
+  "items": [
+    {
+      "label": "ACME support terrain #01",
+      "target_root": "E:\\",
+      "model_file": "qwen2.5-3b-instruct-q4_k_m.gguf",
+      "included_skills": ["accounting", "rag", "general"],
+      "target_platforms": ["WindowsX64", "LinuxX64"],
+      "custom_system_prompt": "Vous êtes un assistant support de la société ACME.",
+      "format_with": "ExFat",
+      "volume_label": "ACME_KEY_01",
+      "version": "0.5.0",
+      "client_id": "ACME-001",
+      "verify_checksums": true,
+      "run_smoke_test": true
+    },
+    {
+      "label": "ACME cyber SOC #02",
+      "target_root": "F:\\",
+      "model_file": "qwen2.5-7b-instruct-q4_k_m.gguf",
+      "included_skills": ["cybersec", "rag", "general"],
+      "target_platforms": ["WindowsX64"],
+      "custom_system_prompt": "Analyste cybersécurité ACME. Rapport structuré (constat, hypothèses, sévérité, actions).",
+      "format_with": "ExFat",
+      "volume_label": "ACME_SOC_02",
+      "version": "0.5.0",
+      "client_id": "ACME-002",
+      "disabled_features": ["remote_lan"],
+      "verify_checksums": true,
+      "run_smoke_test": false
+    }
+  ]
+}

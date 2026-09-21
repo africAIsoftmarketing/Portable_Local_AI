@@ -5,7 +5,24 @@
 
 ---
 
-## What is this?
+## AfricAIsoft Key Builder (Windows)
+
+Application C#/.NET WPF native (Windows 10/11 x64) permettant de **fabriquer**
+des clés USB portables prêtes à l'emploi contenant le studio, un modèle GGUF,
+les skills MCP choisis et les binaires par plateforme. Voir
+`keybuilder/docs/USER-GUIDE.md` (utilisateur) et `keybuilder/docs/TECHNICAL.md`
+(architecture).
+
+Compilation & tests :
+```powershell
+cd keybuilder
+dotnet test tests/AfricAIsoft.KeyBuilder.Core.Tests   # portable — passe sous Linux/Windows
+dotnet build src/AfricAIsoft.KeyBuilder.Wpf           # Windows uniquement (WPF)
+pwsh -File installer/build-portable.ps1               # génère le ZIP portable
+dotnet build installer/KeyBuilder.wixproj             # génère le .msi (WiX v5)
+```
+
+
 
 PortableAI wraps [llama.cpp](https://github.com/ggml-org/llama.cpp)'s `llama-server` into a zero-dependency portable package. You plug in a USB drive (or clone the repo), drop in a model, and run a single script. A local web UI opens in your browser and you can start chatting — fully offline, fully private.
 

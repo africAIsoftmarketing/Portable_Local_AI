@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ressources FR (culture neutre — français par défaut). -->
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AppTitle"><value>AfricAIsoft Key Builder</value></data>
+  <data name="DriveListLabel"><value>Clés USB détectées</value></data>
+  <data name="RefreshBtn"><value>Rafraîchir</value></data>
+  <data name="ModelLabel"><value>Modèle GGUF</value></data>
+  <data name="SkillsLabel"><value>Skills MCP à inclure</value></data>
+  <data name="PlatformsLabel"><value>Plateformes cibles</value></data>
+  <data name="SystemPromptLabel"><value>System Prompt personnalisé</value></data>
+  <data name="ImportPromptBtn"><value>Importer un fichier...</value></data>
+  <data name="BuildBtn"><value>Fabriquer la clé</value></data>
+  <data name="AddBatchBtn"><value>Ajouter au batch</value></data>
+  <data name="RunBatchBtn"><value>Exécuter batch</value></data>
+  <data name="VolumeLabelLabel"><value>Nom volume :</value></data>
+  <data name="VersionLabel"><value>Version :</value></data>
+  <data name="ClientIdLabel"><value>Identifiant client :</value></data>
+  <data name="FormatLabel"><value>Système de fichiers :</value></data>
+  <data name="FormatBeforeCopy"><value>Formater avant copie</value></data>
+  <data name="VerifyChecksums"><value>Vérification SHA-256 post-copie</value></data>
+  <data name="SmokeTest"><value>Test de démarrage rapide</value></data>
+  <data name="EstimationLabel"><value>Estimation</value></data>
+  <data name="StatusReady"><value>Prêt.</value></data>
+</root>
