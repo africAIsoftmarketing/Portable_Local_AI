@@ -181,9 +181,17 @@ def create_app() -> FastAPI:
     # ─── UI statique ──────────────────────────────────────────────────────────
     ui_dir = STUDIO_ROOT / "ui"
     if (ui_dir / "assets").exists():
+        # Cache-Control no-cache : force le navigateur à revalider les assets
+        # à chaque F5 (essentiel pour app.js / i18n / styles). Sans ça,
+        # une ancienne version bogguée cachée empêche les correctifs de prendre.
+        class _NoCacheStaticFiles(StaticFiles):
+            async def get_response(self, path: str, scope):  # noqa: D401
+                resp = await super().get_response(path, scope)
+                resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+                return resp
         app.mount(
             f"{API_PREFIX}/assets" if API_PREFIX else "/assets",
-            StaticFiles(directory=str(ui_dir / "assets")),
+            _NoCacheStaticFiles(directory=str(ui_dir / "assets")),
             name="assets",
         )
 
@@ -191,7 +199,11 @@ def create_app() -> FastAPI:
     async def _root():
         idx = ui_dir / "index.html"
         if idx.exists():
-            return FileResponse(str(idx), media_type="text/html")
+            resp = FileResponse(str(idx), media_type="text/html")
+            # Idem : l'index doit toujours être revérifié pour que les
+            # cache-busters ?v=… sur les scripts prennent effet.
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+            return resp
         return JSONResponse({
             "message": "AfricAIsoft Portable Studio",
             "docs": f"{API_PREFIX}/docs" if API_PREFIX else "/docs",

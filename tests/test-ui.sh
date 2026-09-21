@@ -103,33 +103,18 @@ SCH=$(c "${BASE_URL}${API_PREFIX}/config/schema")
 echo "$SCH" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('properties',{}).get('model')" \
     && pass "config/schema OK" || fail "config/schema KO"
 
-# ── T7 : Persistance i18n (FR→EN→reload→EN et EN→FR→reload→FR) ──────────────
-# Bug déjà survenu 2 fois. On vérifie via le code JS que la logique
-# d'hydratation est correcte et qu'AUCUN setItem parasite ne réécrit la valeur
-# au boot (le seul setItem doit être dans applyLang / le change handler).
-info "T7 : Persistance i18n dans app.js — pattern strict identique au thème"
-JS=$(c "${BASE_URL}${API_PREFIX}/assets/app.js")
-# La fonction applyLang doit exister et écrire localStorage.
-if echo "$JS" | grep -q "function applyLang"; then
-    pass "applyLang() présent (setter unique i18n)"
+# ── T7 : Persistance i18n RÉELLE dans un navigateur (Playwright) ────────────
+# Bug déjà survenu 3 fois. Un test grep n'est PAS suffisant : on doit prouver
+# le comportement (bascule + reload + assertions sur localStorage/DOM/labels).
+# Le test dédié tests/test-ui-i18n.sh utilise chromium headless pour cela.
+info "T7 : test comportemental i18n (Playwright) — FR→EN→reload→EN et inverse"
+if bash "$(dirname "$0")/test-ui-i18n.sh" > /tmp/t7.out 2>&1; then
+    pass "persistance i18n FR/EN validée en navigateur réel"
+    tail -3 /tmp/t7.out | sed 's/^/    /'
 else
-    fail "applyLang() manquant"
+    fail "test-ui-i18n.sh a échoué (voir /tmp/t7.out) :"
+    tail -20 /tmp/t7.out | sed 's/^/    /'
 fi
-# validLang doit valider strictement fr/en.
-if echo "$JS" | grep -q "validLang"; then
-    pass "validLang() strict (fr/en uniquement)"
-else
-    fail "validLang() manquant"
-fi
-# Le boot NE DOIT PAS contenir un setItem inconditionnel de studio_lang.
-# On vérifie qu'il n'y a plus le pattern régressif :
-#   localStorage.setItem("studio_lang", state.lang);
-# HORS des fonctions applyLang() et du change handler.
-BOOT_WRITES=$(echo "$JS" | grep -c 'localStorage.setItem("studio_lang"')
-# On accepte au maximum 1 occurrence (dans applyLang) - les autres écritures
-# seraient des régressions.
-[ "$BOOT_WRITES" -le "1" ] && pass "aucune écriture parasite localStorage lang (occurrences=$BOOT_WRITES ≤ 1)" \
-    || fail "trop d'écritures localStorage lang : $BOOT_WRITES (régression probable)"
 
 # ── T8 : Activation preset System Prompt — persistance côté backend ─────────
 info "T8 : activation preset cybersec → GET renvoie le contenu du preset"
