@@ -1,0 +1,10 @@
+{
+  "skill": "general",
+  "version": "1.0.0",
+  "tools": [
+    {"name": "generate_structured_report",
+     "description": "Génère un rapport Markdown structuré (titre + sections + tableaux)."},
+    {"name": "extract_key_info",
+     "description": "Extrait emails, URLs, IPs, téléphones, IBAN, SIRET, montants, dates."}
+  ]
+}

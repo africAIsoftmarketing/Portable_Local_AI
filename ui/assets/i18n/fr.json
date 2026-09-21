@@ -19,6 +19,16 @@
         "authOff": "désactivée",
         "mcp": "MCP"
     },
+    "backend_reason": {
+        "metal_native": "macOS natif (Metal)",
+        "cuda_found": "GPU NVIDIA détecté ({gpu})",
+        "rocm_found": "GPU AMD détecté (ROCm)",
+        "vulkan_found": "GPU Vulkan détecté",
+        "no_gpu_detected": "Aucun GPU utilisable détecté",
+        "forced_by_config": "Forcé par configuration ({backend})",
+        "forced_binary_missing": "Binaire forcé absent : {path}",
+        "metal_binary_missing": "Binaire Metal absent"
+    },
     "sysprompt": {
         "title": "System prompt",
         "locked": "Verrouillé par l'administrateur",

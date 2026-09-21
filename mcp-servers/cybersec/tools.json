@@ -1,0 +1,14 @@
+{
+  "skill": "cybersec",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "analyze_security_logs",
+      "description": "Détecte brute-force SSH, connexions root et sudo suspicieux dans auth.log/syslog."
+    },
+    {
+      "name": "check_ip_reputation",
+      "description": "Vérifie une IP contre les blocklists locales (Tor exit, IPs malveillantes)."
+    }
+  ]
+}

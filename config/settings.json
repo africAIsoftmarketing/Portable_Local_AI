@@ -35,7 +35,7 @@
     "gpu_layers": null
   },
   "mcp": {
-    "enabled": false,
+    "enabled": true,
     "skills_dir": "skills",
     "skill_timeout": 30,
     "skill_stderr_capture": true,

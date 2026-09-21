@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.config.loader import STUDIO_ROOT, load_settings, save_settings
 from app.config.models import Settings
+from app.agent.trace import BUS
 from app.system_prompt.presets import list_presets, load_preset
 from app.system_prompt.resolver import (
     SYSTEM_PROMPT_FILE,
@@ -126,6 +127,60 @@ def build_studio_router() -> APIRouter:
         return {"status": "saved", "requires_restart": [
             "server.bind_host", "server.port", "model.path", "platform.backend"
         ]}
+
+    # ── Skills MCP ───────────────────────────────────────────────────────────
+    @router.get("/skills", summary="Liste des skills MCP et leur état")
+    async def list_skills(request: Request):
+        reg = getattr(request.app.state, "mcp", None)
+        if reg is None:
+            return {"enabled": False, "skills": []}
+        return {"enabled": True, "skills": reg.snapshot(),
+                "status": reg.status_summary()}
+
+    @router.post("/skills/{skill_name}/invoke",
+                 summary="Invocation directe d'un outil d'un skill (debug/tests)")
+    async def invoke_skill(skill_name: str, request: Request, body: dict[str, Any]):
+        reg = getattr(request.app.state, "mcp", None)
+        if reg is None or skill_name not in reg.clients:
+            raise HTTPException(status_code=404, detail=f"Skill inconnu : {skill_name}")
+        client = reg.clients[skill_name]
+        tool = body.get("tool")
+        args = body.get("arguments", {}) or {}
+        if not tool:
+            raise HTTPException(status_code=400,
+                                detail="Champ 'tool' requis dans le body.")
+        try:
+            result = await client.call(tool, args)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=502,
+                                detail={"error": "mcp_error", "message": str(e)})
+        return {"skill": skill_name, "tool": tool, "result": result}
+
+    @router.post("/skills/rag/reindex",
+                 summary="Force la réindexation du RAG (raccourci)")
+    async def rag_reindex(request: Request):
+        reg = getattr(request.app.state, "mcp", None)
+        if reg is None or "rag" not in reg.clients:
+            raise HTTPException(status_code=404, detail="Skill rag indisponible")
+        result = await reg.clients["rag"].call("reindex_knowledge_base", {})
+        return {"status": "ok", "result": result}
+
+    # ── Trace SSE ────────────────────────────────────────────────────────────
+    @router.get("/events", summary="Flux SSE des événements agentiques (lecture seule)")
+    async def sse_events(request: Request, session_id: str):
+        import json as _json
+        from fastapi.responses import StreamingResponse
+
+        async def _gen():
+            async for evt in BUS.subscribe(session_id):
+                if await request.is_disconnected():
+                    break
+                yield f"event: {evt['type']}\ndata: {_json.dumps(evt, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache",
+                                          "X-Accel-Buffering": "no"})
 
     return router
 

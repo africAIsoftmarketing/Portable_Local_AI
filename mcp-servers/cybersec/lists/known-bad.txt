@@ -1,0 +1,16 @@
+# Blocklist : IPs malveillantes échantillon
+# Format : une IP ou un CIDR par ligne. `#` = commentaire.
+# Source : snapshot manuel de listes publiques (à mettre à jour périodiquement).
+# En production, remplacer par un fetch signé lors de la génération de release.
+
+# Exemples de plages Tor exit connues (extrait synthétique, non exhaustif)
+185.220.101.0/24
+185.220.102.0/24
+199.87.154.255
+109.70.100.0/24
+
+# Exemples d'IPs signalées comme scanneuses/malware C2 (synthétique)
+5.188.10.176
+45.83.64.1
+94.102.61.45
+193.32.162.132

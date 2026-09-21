@@ -1,0 +1,10 @@
+{
+  "skill": "rag",
+  "version": "1.0.0",
+  "tools": [
+    {"name": "search_knowledge_base",
+     "description": "Recherche BM25 dans knowledge/documents/ (txt/md/pdf)."},
+    {"name": "reindex_knowledge_base",
+     "description": "Reconstruit manuellement l'index BM25."}
+  ]
+}

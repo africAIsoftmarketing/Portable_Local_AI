@@ -101,6 +101,26 @@ def build_v1_router() -> APIRouter:
                 detail="llama-server non prêt (voir /health pour le détail)",
             )
 
+        # ── Boucle agentique si tools présents ou tool_choice explicite ─────
+        registry = getattr(request.app.state, "mcp", None)
+        request_tools = payload.get("tools")
+        wants_agent = (registry is not None
+                       and (request_tools
+                            or payload.get("tool_choice") not in (None, "none")))
+        if wants_agent and not stream:
+            from app.agent.loop import AgentLoop
+            settings_obj = request.app.state.settings
+            loop = AgentLoop(
+                llama_client=client,
+                registry=registry,
+                max_rounds=settings_obj.agentic.max_tool_rounds,
+                total_timeout=float(settings_obj.agentic.total_timeout),
+                allow_parallel=settings_obj.agentic.allow_parallel_tools,
+            )
+            result = await loop.run(payload,
+                                    extra_tools=request_tools if isinstance(request_tools, list) else None)
+            return JSONResponse(content=result)
+
         if stream:
             return StreamingResponse(
                 _stream_proxy(client, payload),

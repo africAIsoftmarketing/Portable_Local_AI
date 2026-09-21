@@ -1,0 +1,10 @@
+{
+  "skill": "accounting",
+  "version": "1.0.0",
+  "tools": [
+    {"name": "verify_accounting_entries",
+     "description": "Vérifie l'équilibre débit=crédit et la validité des comptes."},
+    {"name": "calculate_financial_ratios",
+     "description": "Calcule liquidité, solvabilité, rentabilité (PCG/IFRS)."}
+  ]
+}

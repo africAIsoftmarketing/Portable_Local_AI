@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "auto_discover": true,
+  "skill_timeout_sec": 30,
+  "spawn_wait_sec": 5,
+  "max_restart_attempts": 3
+}

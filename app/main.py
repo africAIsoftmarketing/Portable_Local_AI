@@ -24,6 +24,7 @@ from app.api.router_v1 import build_v1_router
 from app.config.loader import STUDIO_ROOT, load_settings
 from app.llama_manager.manager import LlamaManager
 from app.logging_setup.setup import configure_logging
+from app.mcp.registry import MCPRegistry
 from app.platform_utils.backend_detector import detect_backend
 from app.platform_utils.detect import detect_platform
 from app.security.api_key import ensure_api_key
@@ -85,6 +86,18 @@ async def lifespan(app: FastAPI):
             logger.error("llama-server KO : %s", e)
             # On continue quand même : /health signalera l'état dégradé.
 
+    # Registre MCP - découverte + spawn des skills après llama.
+    registry = MCPRegistry()
+    app.state.mcp = registry
+    if settings.mcp.enabled and os.environ.get("STUDIO_SKIP_MCP", "0") != "1":
+        try:
+            report = await registry.start_all()
+            logger.info("MCP : %d skill(s) spawned, %d KO",
+                        len(report.get("spawned", [])),
+                        len(report.get("failed", [])))
+        except Exception as e:  # noqa: BLE001
+            logger.error("MCP registry startup failed: %s", e)
+
     # Handler signaux explicite (uvicorn le fait déjà mais on sécurise)
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
@@ -97,6 +110,11 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     logger.info("=== Arrêt en cours ===")
+    if getattr(app.state, "mcp", None):
+        try:
+            await app.state.mcp.stop_all()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Arrêt MCP : %s", e)
     if getattr(app.state, "llama", None):
         try:
             await app.state.llama.stop()
@@ -147,7 +165,8 @@ def create_app() -> FastAPI:
             "backend": st.backend,
             "components": {
                 "llama": llama_status,
-                "mcp": {"status": "disabled", "reason": "Phase 3 - non implémenté"},
+                "mcp": (st.mcp.status_summary() if getattr(st, "mcp", None)
+                        else {"status": "disabled", "reason": "not initialized"}),
                 "api": {"status": "ok",
                         "auth_enabled": settings.security.require_api_key},
             },

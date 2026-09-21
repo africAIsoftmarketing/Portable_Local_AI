@@ -14,20 +14,33 @@
     const API_KEY = localStorage.getItem("studio_api_key") || null;
 
     // ── I18n ─────────────────────────────────────────────────────────────────
-    let currentLang = localStorage.getItem("studio_lang") || "fr";
+    // Persistance robuste : lu une seule fois au boot, écrit à l'init ET à
+    // chaque changement, sans dépendre d'une valeur préalable de <select>.
+    function _readStoredLang() {
+        const stored = localStorage.getItem("studio_lang");
+        if (stored === "fr" || stored === "en") return stored;
+        // 1ère visite : détecte la langue du navigateur (défaut fr).
+        return (navigator.language || "fr").toLowerCase().startsWith("en") ? "en" : "fr";
+    }
+    let currentLang = _readStoredLang();
+    // Écriture idempotente immédiate pour que reload → même langue.
+    localStorage.setItem("studio_lang", currentLang);
     let translations = {};
 
     async function loadI18n(lang) {
         try {
-            const r = await fetch(`${API_PREFIX}/assets/i18n/${lang}.json`);
+            // Cache-buster pour éviter une ancienne réponse HTTP cache.
+            const r = await fetch(`${API_PREFIX}/assets/i18n/${lang}.json?_=${Date.now()}`,
+                                  { cache: "no-store" });
+            if (!r.ok) throw new Error("HTTP " + r.status);
             translations = await r.json();
             document.documentElement.lang = lang;
             applyI18n();
-            // Ré-applique aussi le contenu dynamique (badge, platform kv).
+            // Ré-applique le contenu dynamique après changement de langue.
             await refreshHealth();
             await loadSystemPrompt();
         } catch (e) {
-            console.warn("i18n load failed", e);
+            console.warn("i18n load failed for", lang, e);
         }
     }
 
@@ -82,9 +95,22 @@
                           + " · backend=" + h.backend.backend;
 
             info.innerHTML = "";
+            // Traduction locale du reason_code retourné par le backend
+            // (aucune chaîne humaine côté serveur).
+            const rc = h.backend.reason_code || "";
+            const rp = h.backend.reason_params || {};
+            const reasonKey = "backend_reason." + rc;
+            let reasonText = t(reasonKey);
+            if (reasonText === reasonKey) {  // pas de traduction → texte brut
+                reasonText = rc || (h.backend.reason || "");
+            }
+            // Substitue les placeholders {name} avec les params.
+            reasonText = reasonText.replace(/\{(\w+)\}/g,
+                          (_, k) => (rp[k] !== undefined ? rp[k] : ""));
+
             const rows = [
                 [t("platform.os"),      h.platform.os + " " + h.platform.arch],
-                [t("platform.backend"), h.backend.backend + " (" + h.backend.reason + ")"],
+                [t("platform.backend"), h.backend.backend + " (" + reasonText + ")"],
                 [t("platform.version"), h.version],
                 [t("platform.auth"),    h.components.api.auth_enabled
                                         ? t("platform.authOn") : t("platform.authOff")],
@@ -238,11 +264,22 @@
     // ── Bootstrap ────────────────────────────────────────────────────────────
     document.addEventListener("DOMContentLoaded", async () => {
         const langSelect = document.getElementById("lang-select");
+        // On force la valeur du <select> APRÈS le rendu des <option>.
         langSelect.value = currentLang;
+        // Sécurité : si le navigateur n'a pas honoré la valeur (option absente),
+        // on retombe sur fr et on ré-écrit localStorage en conséquence.
+        if (langSelect.value !== currentLang) {
+            currentLang = "fr";
+            localStorage.setItem("studio_lang", "fr");
+            langSelect.value = "fr";
+        }
         langSelect.addEventListener("change", async (e) => {
-            currentLang = e.target.value;
-            localStorage.setItem("studio_lang", currentLang);
-            await loadI18n(currentLang);
+            const newLang = (e.target.value === "en" || e.target.value === "fr")
+                            ? e.target.value : "fr";
+            currentLang = newLang;
+            localStorage.setItem("studio_lang", newLang);
+            document.documentElement.lang = newLang;
+            await loadI18n(newLang);
         });
 
         document.getElementById("sp-textarea").addEventListener("input", updateTokenCount);
