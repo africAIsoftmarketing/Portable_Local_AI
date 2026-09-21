@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://africaisoft.example/schemas/settings.json",
+  "title": "AfricAIsoft Portable Studio - settings",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bind_host": {"type": "string"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "llama_host": {"type": "string"},
+        "llama_port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "cors": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allow_origins": {"type": "array", "items": {"type": "string"}},
+            "allow_credentials": {"type": "boolean"},
+            "allow_methods": {"type": "array", "items": {"type": "string"}},
+            "allow_headers": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "rate_limit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "requests_per_minute": {"type": "integer", "minimum": 1}
+          }
+        },
+        "log_level": {"enum": ["DEBUG", "INFO", "WARNING", "ERROR"]}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": ["string", "null"]},
+        "context_length": {"type": "integer", "minimum": 128},
+        "threads": {"type": ["integer", "null"], "minimum": 1},
+        "gpu_layers": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "skills_dir": {"type": "string"},
+        "skill_timeout": {"type": "integer", "minimum": 1},
+        "skill_stderr_capture": {"type": "boolean"},
+        "auto_restart_on_crash": {"type": "boolean"}
+      }
+    },
+    "agentic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_tool_rounds": {"type": "integer", "minimum": 1, "maximum": 20},
+        "skill_timeout": {"type": "integer", "minimum": 1},
+        "total_timeout": {"type": "integer", "minimum": 1},
+        "allow_parallel_tools": {"type": "boolean"},
+        "tool_calling_mode": {"enum": ["auto", "native", "fallback_json"]},
+        "on_tool_error": {"enum": ["return_to_model", "abort", "retry_once"]},
+        "expose_trace_to_ui": {"type": "boolean"}
+      }
+    },
+    "system_prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "active_preset": {"type": ["string", "null"]},
+        "locked": {"type": "boolean"}
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": {"enum": ["auto", "cpu", "cuda", "rocm", "vulkan", "metal"]},
+        "gpu_layers": {"type": ["integer", "null"]},
+        "force_binary_variant": {"type": ["string", "null"]}
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "persistent": {"type": "boolean"},
+        "retention_days": {"type": "integer", "minimum": 1},
+        "startup_history": {"type": "integer", "minimum": 1}
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require_api_key": {"type": "boolean"},
+        "require_signature": {"type": "boolean"},
+        "allowed_log_roots": {"type": "array", "items": {"type": "string"}},
+        "allowed_data_roots": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_language": {"enum": ["fr", "en"]},
+        "theme": {"enum": ["auto", "light", "dark"]}
+      }
+    }
+  }
+}

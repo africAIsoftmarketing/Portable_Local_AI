@@ -1,0 +1,18 @@
+{
+    "tagline": "Assistant IA local & confidentiel",
+    "platform": { "title": "Plateforme" },
+    "sysprompt": {
+        "title": "System prompt",
+        "locked": "Verrouillé par l'administrateur",
+        "tokens": "tokens (approx.)",
+        "save": "Enregistrer",
+        "reset": "Défaut",
+        "confirmReset": "Restaurer le system prompt par défaut ?"
+    },
+    "chat": {
+        "placeholder": "Écrivez votre message...",
+        "send": "Envoyer",
+        "idle": "Prêt",
+        "streaming": "Génération en cours..."
+    }
+}

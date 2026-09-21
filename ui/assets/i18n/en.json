@@ -1,0 +1,18 @@
+{
+    "tagline": "Local & confidential AI assistant",
+    "platform": { "title": "Platform" },
+    "sysprompt": {
+        "title": "System prompt",
+        "locked": "Locked by administrator",
+        "tokens": "tokens (approx.)",
+        "save": "Save",
+        "reset": "Default",
+        "confirmReset": "Restore the default system prompt?"
+    },
+    "chat": {
+        "placeholder": "Type your message...",
+        "send": "Send",
+        "idle": "Ready",
+        "streaming": "Generating..."
+    }
+}

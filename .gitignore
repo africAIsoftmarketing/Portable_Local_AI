@@ -1,0 +1,57 @@
+# AfricAIsoft Portable Studio - fichiers non versionnés
+
+# Modèles GGUF utilisateur (peuvent peser plusieurs Go)
+models/*.gguf
+models/*.bin
+
+# Binaires téléchargés/compilés (récupérés par scripts/fetch-binaries.*)
+bin/**/llama-server
+bin/**/llama-server.exe
+bin/**/*.so
+bin/**/*.so.*
+bin/**/*.dylib
+bin/**/*.dll
+bin/**/LICENSE
+bin/**/ggml-*
+
+# Runtime Python portable (récupéré par scripts/setup-python.*)
+runtime/**/python/
+
+# Logs et données runtime
+logs/*.log
+logs/*.log.*
+data/pids/*.pid
+data/pids/*.json
+
+# Cache de téléchargement local
+.cache/
+
+# Configuration utilisateur (créée au 1er lancement)
+config/api_key.txt
+config/system_prompt.txt
+
+# Index RAG (généré au premier scan)
+skills/*/.index/
+
+# Standards Python / OS
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.DS_Store
+Thumbs.db
+
+# Emergent / IDE
+.emergent/
+.vscode/
+.idea/
+
+# Fichiers temporaires
+*.tmp
+*.swp
+*~

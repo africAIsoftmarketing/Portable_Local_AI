@@ -1,0 +1,77 @@
+{
+  "server": {
+    "bind_host": "127.0.0.1",
+    "port": 8080,
+    "llama_host": "127.0.0.1",
+    "llama_port": 8090,
+    "cors": {
+      "allow_origins": [
+        "http://127.0.0.1:8080",
+        "http://localhost:8080"
+      ],
+      "allow_credentials": false,
+      "allow_methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "OPTIONS"
+      ],
+      "allow_headers": [
+        "Content-Type",
+        "Authorization"
+      ]
+    },
+    "rate_limit": {
+      "enabled": false,
+      "requests_per_minute": 60
+    },
+    "log_level": "INFO"
+  },
+  "model": {
+    "path": null,
+    "context_length": 4096,
+    "threads": null,
+    "gpu_layers": null
+  },
+  "mcp": {
+    "enabled": false,
+    "skills_dir": "skills",
+    "skill_timeout": 30,
+    "skill_stderr_capture": true,
+    "auto_restart_on_crash": true
+  },
+  "agentic": {
+    "max_tool_rounds": 5,
+    "skill_timeout": 30,
+    "total_timeout": 120,
+    "allow_parallel_tools": true,
+    "tool_calling_mode": "auto",
+    "on_tool_error": "return_to_model",
+    "expose_trace_to_ui": true
+  },
+  "system_prompt": {
+    "active_preset": null,
+    "locked": false
+  },
+  "platform": {
+    "backend": "auto",
+    "gpu_layers": null,
+    "force_binary_variant": null
+  },
+  "logging": {
+    "persistent": false,
+    "retention_days": 7,
+    "startup_history": 5
+  },
+  "security": {
+    "require_api_key": false,
+    "require_signature": false,
+    "allowed_log_roots": [],
+    "allowed_data_roots": []
+  },
+  "ui": {
+    "default_language": "fr",
+    "theme": "auto"
+  }
+}

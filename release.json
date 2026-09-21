@@ -1,0 +1,16 @@
+{
+  "release_id": "africaisoft-studio-phase2-dev",
+  "version": "0.2.0-phase2",
+  "created_at": "2026-08-24T00:00:00Z",
+  "llama_cpp_version": "b11071",
+  "python_version": "3.12",
+  "binaries": {},
+  "python_runtime": {},
+  "skills": {},
+  "signature": {
+    "algo": "ed25519",
+    "public_key_hint": "unsigned-dev-build",
+    "value": null
+  },
+  "notes": "Dev build - manifest non signé. Voir docs/ARCHITECTURE.md §12.2 pour la production."
+}
