@@ -1,11 +1,33 @@
 {
+    "app": { "title": "AfricAIsoft Portable Studio" },
     "tagline": "Local & confidential AI assistant",
-    "platform": { "title": "Platform" },
+    "lang": { "label": "Interface language" },
+    "health": { "tooltip": "Stack health" },
+    "badge": {
+        "ok": "OK",
+        "partial": "PARTIAL",
+        "error": "DOWN",
+        "unknown": "…"
+    },
+    "platform": {
+        "title": "Platform",
+        "os": "System",
+        "backend": "Backend",
+        "version": "Version",
+        "auth": "Authentication",
+        "authOn": "enabled",
+        "authOff": "disabled",
+        "mcp": "MCP"
+    },
     "sysprompt": {
         "title": "System prompt",
         "locked": "Locked by administrator",
         "tokens": "tokens (approx.)",
+        "source": "source:",
+        "sourceLocked": "locked",
+        "placeholder": "Loading...",
         "save": "Save",
+        "saved": "Saved",
         "reset": "Default",
         "confirmReset": "Restore the default system prompt?"
     },
@@ -13,6 +35,10 @@
         "placeholder": "Type your message...",
         "send": "Send",
         "idle": "Ready",
-        "streaming": "Generating..."
+        "streaming": "Generating...",
+        "modelLabel": "Model:"
+    },
+    "errors": {
+        "saveFailed": "Save failed"
     }
 }

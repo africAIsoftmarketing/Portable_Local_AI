@@ -60,21 +60,36 @@ def build_v1_router() -> APIRouter:
                                 detail="`messages` doit être une liste")
 
         # Résolution du system prompt (règles §6 de l'architecture).
-        override = payload.pop("system", None)
+        # Trois canaux d'override possibles, tous ignorés si locked=true :
+        #   (a) champ 'system' top-level (extension propriétaire)
+        #   (b) premier message avec role='system' dans la liste `messages`
+        # Priorité (a) > (b) si les deux présents.
+        top_override = payload.pop("system", None)
+        inline_override = None
+        if messages and isinstance(messages[0], dict) \
+                and messages[0].get("role") == "system":
+            inline_override = messages[0].get("content")
+
+        effective_override = None
+        if isinstance(top_override, str) and top_override.strip():
+            effective_override = top_override
+        elif isinstance(inline_override, str) and inline_override.strip():
+            effective_override = inline_override
+
         settings = request.app.state.settings
         resolved_sp = resolve_system_prompt(
             settings=settings,
-            request_override=override if isinstance(override, str) else None,
+            request_override=effective_override,
         )
 
-        # Injecte / remplace le message system.
+        # Reconstruit la liste des messages sans DOUBLONNER de system :
+        # on retire toute occurrence de role='system' puis on préfixe avec resolved_sp.
+        non_system = [m for m in messages
+                      if isinstance(m, dict) and m.get("role") != "system"]
         if resolved_sp is not None:
-            has_system = messages and messages[0].get("role") == "system"
-            if has_system:
-                messages[0] = {"role": "system", "content": resolved_sp}
-            else:
-                messages.insert(0, {"role": "system", "content": resolved_sp})
-        payload["messages"] = messages
+            payload["messages"] = [{"role": "system", "content": resolved_sp}] + non_system
+        else:
+            payload["messages"] = non_system
 
         stream = bool(payload.get("stream", False))
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AfricAIsoft Portable Studio</title>
+    <title data-i18n="app.title">AfricAIsoft Portable Studio</title>
     <link rel="stylesheet" href="assets/styles.css" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%2280%22 font-size=%2280%22>A</text></svg>" />
 </head>
@@ -12,13 +12,14 @@
     <div class="brand">
         <span class="logo">A</span>
         <div>
-            <div class="brand-name">AfricAIsoft Portable Studio</div>
+            <div class="brand-name" data-i18n="app.title">AfricAIsoft Portable Studio</div>
             <div class="brand-tag" data-i18n="tagline">Assistant IA local &amp; confidentiel</div>
         </div>
     </div>
     <div class="topbar-actions">
-        <span id="health-badge" class="badge badge-unknown" title="État du stack">…</span>
-        <select id="lang-select" aria-label="Language">
+        <span id="health-badge" class="badge badge-unknown"
+              data-i18n-title="health.tooltip">…</span>
+        <select id="lang-select" data-i18n-title="lang.label" aria-label="Language">
             <option value="fr">FR</option>
             <option value="en">EN</option>
         </select>
@@ -38,11 +39,13 @@
                 Verrouillé par l'administrateur
             </div>
             <textarea id="sp-textarea" rows="10" spellcheck="false"
+                      data-i18n-placeholder="sysprompt.placeholder"
                       placeholder="Chargement..."></textarea>
             <div class="sp-meta">
                 <span id="sp-token-count">0</span>
                 <span data-i18n="sysprompt.tokens">tokens (approx.)</span>
-                &middot; <span id="sp-source">–</span>
+                &middot; <span data-i18n="sysprompt.source">source :</span>
+                <span id="sp-source">–</span>
             </div>
             <div class="sp-actions">
                 <button id="sp-save" data-i18n="sysprompt.save">Enregistrer</button>
@@ -62,6 +65,7 @@
             <button id="send-btn" type="submit" data-i18n="chat.send">Envoyer</button>
         </form>
         <div class="chat-footer">
+            <span data-i18n="chat.modelLabel">Modèle :</span>
             <span id="model-name">–</span>
             &middot;
             <span id="stream-status" data-i18n="chat.idle">Prêt</span>

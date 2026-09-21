@@ -1,11 +1,33 @@
 {
+    "app": { "title": "AfricAIsoft Portable Studio" },
     "tagline": "Assistant IA local & confidentiel",
-    "platform": { "title": "Plateforme" },
+    "lang": { "label": "Langue de l'interface" },
+    "health": { "tooltip": "État du stack" },
+    "badge": {
+        "ok": "OK",
+        "partial": "PARTIEL",
+        "error": "KO",
+        "unknown": "…"
+    },
+    "platform": {
+        "title": "Plateforme",
+        "os": "Système",
+        "backend": "Backend",
+        "version": "Version",
+        "auth": "Authentification",
+        "authOn": "activée",
+        "authOff": "désactivée",
+        "mcp": "MCP"
+    },
     "sysprompt": {
         "title": "System prompt",
         "locked": "Verrouillé par l'administrateur",
         "tokens": "tokens (approx.)",
+        "source": "source :",
+        "sourceLocked": "verrouillé",
+        "placeholder": "Chargement...",
         "save": "Enregistrer",
+        "saved": "Enregistré",
         "reset": "Défaut",
         "confirmReset": "Restaurer le system prompt par défaut ?"
     },
@@ -13,6 +35,10 @@
         "placeholder": "Écrivez votre message...",
         "send": "Envoyer",
         "idle": "Prêt",
-        "streaming": "Génération en cours..."
+        "streaming": "Génération en cours...",
+        "modelLabel": "Modèle :"
+    },
+    "errors": {
+        "saveFailed": "Erreur d'enregistrement"
     }
 }

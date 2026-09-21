@@ -1,0 +1,9 @@
+{
+  "name": "africaisoft-studio-frontend-redirect",
+  "version": "0.2.0-phase2",
+  "private": true,
+  "description": "Page de redirection statique : envoie / vers /api/ où réside l'UI du studio.",
+  "scripts": {
+    "start": "python3 -m http.server 3000 --bind 0.0.0.0"
+  }
+}

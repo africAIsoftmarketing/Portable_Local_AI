@@ -84,6 +84,65 @@ else
     fail "override non appliqué (réponse: $REPLY)"
 fi
 
+# ── T4bis : Override inline via role='system' dans messages[] ────────────────
+# Preuve rigoureuse : le payload envoyé au proxy avec inline role='system'
+# doit produire EXACTEMENT la même réponse que l'appel direct à llama-server
+# avec le même payload. Si les deux réponses sont identiques (même token le
+# premier), la passthrough est prouvée indépendamment du comportement du modèle.
+info "T4bis : override inline role='system' - parité PROXY vs DIRECT llama-server"
+PAYLOAD='{"messages":[{"role":"system","content":"Reply ONLY in English, never French."},{"role":"user","content":"Hello there."}],"max_tokens":24,"temperature":0.0,"seed":42}'
+
+REPLY_PROXY="$(curl_j -X POST -H "Content-Type: application/json" \
+    -d "$PAYLOAD" \
+    "${BASE_URL}${API_PREFIX}/v1/chat/completions" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
+
+REPLY_DIRECT="$(curl -sS -X POST -H "Content-Type: application/json" \
+    -d "$PAYLOAD" \
+    "http://127.0.0.1:8090/v1/chat/completions" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
+
+echo "    proxy : $REPLY_PROXY"
+echo "    direct: $REPLY_DIRECT"
+if [ -n "$REPLY_PROXY" ] && [ "$REPLY_PROXY" = "$REPLY_DIRECT" ]; then
+    pass "override inline honoré (proxy passthrough vérifié)"
+else
+    fail "override inline non appliqué (proxy≠direct)"
+fi
+
+# Test complémentaire : preuve que l'inline role='system' PRÉVAUT sur le
+# fichier serveur. On compare deux réponses via proxy avec le MÊME user prompt
+# mais avec un inline system différent → si les réponses diffèrent, l'override
+# est bien pris en compte (le fichier serveur seul donnerait toujours la même
+# réponse). deterministe grâce à seed=42 et temperature=0.
+REPLY_A="$(curl_j -X POST -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"system","content":"Answer ONLY with the exact word: ALPHA"},{"role":"user","content":"Say the codeword."}],"max_tokens":8,"temperature":0.0,"seed":42}' \
+    "${BASE_URL}${API_PREFIX}/v1/chat/completions" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
+REPLY_B="$(curl_j -X POST -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"system","content":"Answer ONLY with the exact word: BETA"},{"role":"user","content":"Say the codeword."}],"max_tokens":8,"temperature":0.0,"seed":42}' \
+    "${BASE_URL}${API_PREFIX}/v1/chat/completions" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
+echo "    inline A (ALPHA): $REPLY_A"
+echo "    inline B (BETA) : $REPLY_B"
+if [ -n "$REPLY_A" ] && [ -n "$REPLY_B" ] && [ "$REPLY_A" != "$REPLY_B" ]; then
+    pass "réponses différentes selon inline system (override effectif)"
+else
+    fail "réponses identiques → inline system pas pris en compte (A=$REPLY_A / B=$REPLY_B)"
+fi
+
+# ── T4ter : Pas de double system - un seul message system remonté ────────────
+info "T4ter : pas de duplication du system message"
+# Note : on ne peut pas facilement observer le payload envoyé au modèle sans hook.
+# On vérifie indirectement : envoi de 2 messages system consécutifs suivis d'un user,
+# la réponse doit rester cohérente (200 OK, contenu non vide).
+CODE="$(curl_j -o /tmp/t4ter.out -w '%{http_code}' -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"system","content":"A"},{"role":"system","content":"B"},{"role":"user","content":"hi"}],"max_tokens":8,"temperature":0.0}' \
+    "${BASE_URL}${API_PREFIX}/v1/chat/completions")"
+[ "$CODE" = "200" ] && pass "requête multi-system acceptée (fusion faite serveur)" \
+    || fail "requête multi-system = $CODE"
+
 # ── T5 : Reset ───────────────────────────────────────────────────────────────
 info "T5 : POST /system-prompt/reset"
 CODE="$(curl_j -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}${API_PREFIX}/system-prompt/reset")"
