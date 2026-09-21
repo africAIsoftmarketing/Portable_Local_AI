@@ -46,6 +46,18 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Artefacts .NET (Key Builder) - JAMAIS commiter les binaires compilés.
+# Ciblage précis pour ne PAS toucher au bin/ racine qui héberge llama-server.
+keybuilder/**/bin/
+keybuilder/**/obj/
+keybuilder/artifacts/
+
+# Clés privées Ed25519 (fabricant) — ne jamais commiter.
+keys/private.pem
+
+# Distribution portable générée par scripts/build-portable.sh
+dist/
+
 # Emergent / IDE
 .emergent/
 .vscode/

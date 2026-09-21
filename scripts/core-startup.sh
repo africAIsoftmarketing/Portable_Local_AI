@@ -90,7 +90,8 @@ _is_restricted_fs() {
     fi
     local fstype=""
     fstype=$(stat -f -c '%T' "$dir" 2>/dev/null) || fstype=$(stat -f '%T' "$dir" 2>/dev/null) || true
-    case "${fstype,,}" in
+    # NB : `${var,,}` (bash 4+) non supporté par le bash 3.2 système de macOS.
+    case "$(printf '%s' "$fstype" | tr '[:upper:]' '[:lower:]')" in
         msdos|vfat|exfat|fuseblk|ntfs|ntfs-3g|fuse.ntfs*|fuse.exfat*) return 0 ;;
     esac
     return 1

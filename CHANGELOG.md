@@ -1,56 +1,123 @@
 # CHANGELOG
 
-## [0.3.0] Phase 3 — Système agentique complet — 2026-08-24
+## [1.0.0] Livrable final — Phase 6 finalisation — 2026-08-24
 
 ### Ajouté
-- **MCP stdio** (JSON-RPC 2.0 line-delimited) : framework `_shared/mcp_server.py` + client asynchrone `app/mcp/client.py` avec spawn, handshake `initialize` + `tools/list`, appels `tools/call` timeoutés, respawn automatique (max 3 tentatives puis skill `unavailable`).
-- **Registre MCP** (`app/mcp/registry.py`) : découverte automatique + lecture `skills/registry.json` + `config/mcp.json`.
-- **4 skill packs, 7 outils fonctionnels** (aucun stub) :
-  - `cybersec` : `analyze_security_logs`, `check_ip_reputation` (blocklist + CIDR).
-  - `accounting` : `verify_accounting_entries`, `calculate_financial_ratios`.
-  - `rag` : `search_knowledge_base` (BM25 pur Python vendored ≤ 50 Ko, indexation auto), `reindex_knowledge_base`.
-  - `general` : `generate_structured_report`, `extract_key_info` (regex FR+EN : emails, URLs, IPs, téléphones, IBAN, SIRET, montants, dates).
-- **Template** `mcp-servers/_template/` pour créer un skill en < 5 min.
-- **Boucle agentique** (`app/agent/loop.py`) : max_tool_rounds=5, total_timeout=120 s, `asyncio.gather` avec échec partiel toléré, double stratégie tool calling (natif OpenAI + fallback JSON ```json / inline / `<tool_call>`).
-- **Trace SSE** (`app/agent/trace.py`) : bus in-memory, endpoint `GET /api/events?session_id=...`, trace aussi retournée dans `metadata.trace` de `/v1/chat/completions`.
-- **Endpoints** : `GET /api/skills`, `POST /api/skills/{name}/invoke`, `POST /api/skills/rag/reindex`, `GET /api/events`.
-- **Docs** : `docs/COMPILATION.md` (build llama-server incluant cas glibc<2.38), `docs/ADD-SKILL.md`.
-- **Tests** : `tests/test-mcp.sh` (10 tests skills), `tests/test-agentic-loop.sh` (5 scénarios agent).
+- **Vérification Ed25519 réelle du manifest** (`app/security/manifest_verifier.py`) :
+  signature détachée `release.json.sig` + clé publique `config/public.pem`.
+  `cryptography==43.0.1` ajouté à `app/requirements.txt`.
+- **Scripts de packaging portable** :
+  - `scripts/build-portable.sh` : distribution assemblée par plateforme
+    (`--target linux-x64|linux-arm64|macos-x64|macos-arm64|windows-x64|all`),
+    Python 3.12 embarqué + wheels + binaires llama.cpp + code + manifest.
+  - `scripts/build-portable.ps1` : équivalent Windows PowerShell.
+  - `scripts/sign-release.py` : `generate-keypair`, `sign`, `verify` Ed25519.
+- **Documentation finale** :
+  - `README.md` : réécriture complète en français (Studio uniquement,
+    plus de mélange avec le socle PortableAI amont).
+  - `docs/EXAMPLES.md` : 3 scénarios agentiques (cybersec / comptable /
+    multi-outils) avec payloads JSON et traces réelles.
+  - `docs/ANALYSIS.md` : rapport Phase 0 exhaustif de l'état du dépôt.
+- **Tests finaux** :
+  - `tests/RESULTS.md` : rapport horodaté 95/95 Studio + 28/28 Core.
+  - `tests/manual-checklist.md` : critères d'acceptation Livrables 1 & 2
+    avec procédure pas-à-pas par plateforme.
 
 ### Corrigé
-- **i18n reload** : la langue EN persiste maintenant au rechargement (init idempotent + détection navigateur + cache-buster).
-- **Backend `reason_code`** : plus de français en dur dans `/api/health`, tout est machine-code + params (`no_gpu_detected`, `cuda_found`, …) traduit côté UI.
+- **Fichiers i18n `ui/assets/i18n/{fr,en}.json` maintenant trackés dans git**
+  (bloquant : un clone frais cassait l'UI).
+- **`${fstype,,}` (bash 4)** remplacé par `tr '[:upper:]' '[:lower:]'` dans
+  `start.sh` et `scripts/core-startup.sh` : compatible avec le bash 3.2
+  système de macOS.
+- **Modèle GGUF de démo (~350 Mo)** retiré du tracking git (`git rm --cached`).
+  Il reste sur disque pour les tests locaux ; `.gitignore` couvre
+  `models/*.gguf`.
+- **`.gitignore` .NET** : ajout de `keybuilder/**/bin/`, `keybuilder/**/obj/`,
+  `keybuilder/artifacts/`, `keys/private.pem`, `dist/`. Le `bin/` racine
+  (binaires llama-server) reste géré séparément.
+- **VERSION** synchronisé à `1.0.0` (au lieu de `0.2.0-phase2`), idem
+  `app/__init__.py` et `app/main.py`.
 
-### Modifié
-- `settings.json` : `mcp.enabled=true` (par défaut).
-- `/api/health` : composant `mcp` reporte l'état réel du registre.
+### Documenté (limites honnêtes)
+- Le socle historique **PortableAI** (`install.sh`, `install.bat`, `start.sh`,
+  `start.bat`) est conservé pour rétrocompatibilité (utilisateurs habitués
+  au workflow amont), mais le workflow officiel est désormais `start-linux.sh`
+  / `start-mac.command` / `start-windows.bat` (Studio complet).
+- Le modèle par défaut Qwen 2.5-0.5B reste insuffisant pour le tool-routing
+  autonome fiable (voir §Limites du README).
+- Vérification Ed25519 : implémentée mais **désactivée par défaut**
+  (`security.require_signature=false`). À activer en production sur les
+  livraisons signées.
 
-### Limites documentées
-- **Décision autonome des tools** : Qwen 0.5B n'est PAS fiable pour décider seul des appels d'outils. Test T4 de `test-agentic-loop.sh` marqué `best-effort` et non-bloquant. Client doit valider avec un modèle 7B+ (Llama 3.1 8B, Qwen 2.5 7B, Mistral-Nemo).
-- **Signature Ed25519** : toujours non implémentée (Phase 4).
-- **Backends GPU** : binaires non fetchés par défaut (voir `docs/COMPILATION.md`).
+---
+
+## [0.5.0] Phase 5 — Key Builder Windows — 2026-08-24
+
+### Ajouté
+- **`keybuilder/` — application C#/.NET 8 WPF Windows** pour fabriquer des
+  clés USB portables prêtes à l'emploi.
+  - `AfricAIsoft.KeyBuilder.Core` (net8.0) : bibliothèque portable
+    Linux/Windows/macOS (aucune API Windows), 28 tests xUnit verts.
+    Services : ChecksumService (SHA-256 streaming), SizeEstimator,
+    GgufValidator (magic + version 1..3), PreflightValidator, ResumeJournal
+    (reprise après interruption), SkillFilter, SystemPromptInjector,
+    ManifestBuilder, ReportGenerator (HTML autonome), BatchQueue,
+    UsbBuildOrchestrator.
+  - `AfricAIsoft.KeyBuilder.Wpf` (net8.0-windows) : front WPF Windows-only,
+    détection USB temps réel via WMI, DiskPartFormatter avec élévation UAC.
+  - Installer WiX v4 (`installer/Product.wxs`, `KeyBuilder.wixproj`) +
+    script portable ZIP (`installer/build-portable.ps1`).
+  - Docs : `keybuilder/docs/USER-GUIDE.md`, `keybuilder/docs/TECHNICAL.md`,
+    `keybuilder/batch-config.example.json`.
+
+---
+
+## [0.4.0] Phase 4 — UI Web complète FR/EN — 2026-08-24
+
+### Ajouté
+- **UI Vanilla HTML/CSS/JS** dans `ui/` (< 5 Mo, aucun bundler) :
+  - Layout 3 colonnes (conversations / chat / panneaux
+    Skills-Models-SystemPrompt-Config).
+  - Chat streaming SSE + boucle agentique avec trace repliable.
+  - Sidebar conversations avec persistance JSON (`data/conversations.json`).
+  - Panneau Skills : état MCP + tools + réindexation RAG + liste des docs.
+  - Panneau Modèles : liste .gguf + switch à chaud (unload/load llama-server).
+  - Panneau System Prompt : édition + presets (cybersec/accounting/legal)
+    + verrouillage `locked`.
+  - Panneau Config : formulaire dynamique validé JSON Schema, warnings
+    "requires_restart".
+  - i18n FR/EN complète, ~40 attributs `data-i18n`.
+  - Thème light/dark persistant, palette sable/vert forêt et graphite/ambre.
+- **Endpoints** ajoutés :
+  - `GET/POST/PUT/DELETE /api/conversations[...]`,
+  - `POST /api/conversations/{id}/messages`,
+  - `GET /api/models/available`, `POST /api/models/switch`.
+
+### Corrigé
+- **Anti-FOUT i18n** : `body.booting {visibility:hidden}` + `try/finally`
+  retire la classe seulement après hydratation complète du dictionnaire i18n.
+  Test Playwright headless couvre le cas d'une latence réseau de 700 ms.
+- **`GET /system-prompt` honore `active_preset`** : retourne le contenu
+  du preset actif au lieu du fichier custom.
+
+---
+
+## [0.3.0] Phase 3 — Système agentique complet — 2026-08-24
+
+Cf. précédent CHANGELOG (MCP stdio, 4 skill packs, 8 outils, boucle
+agentique max 5 rounds avec fallback JSON parsing, trace SSE `/api/events`).
 
 ---
 
 ## [0.2.0] Phase 2 — Cœur portable — 2026-08-24
 
-### Ajouté
-- Orchestrateur FastAPI : `/v1/chat/completions` (stream SSE + non-stream), `/v1/models`, `/health`.
-- System prompt multi-source (override > preset > custom > default) avec `locked` (403 + override ignoré).
-- Détection backend GPU (arbre CUDA > ROCm > Vulkan > CPU + Metal macOS).
-- Launchers `start-linux.sh`, `start-mac.command`, `start-windows.bat` + `stop-*`.
-- `scripts/fetch-binaries.sh/.ps1` (téléchargement releases officielles).
-- UI statique HTML/CSS/JS vanilla avec i18n FR/EN.
-- Tests `test-api.sh` (7/7), `test-system-prompt.sh` (13/13).
-
-### Corrigé
-- Override `role:"system"` inline dans `messages[]` (priorité top-level > inline > server).
-- UI i18n complète et réversible (17 attributs `data-i18n`).
-- Racine `/` = 200 (mini-frontend qui redirige vers `/api/`).
+Cf. précédent CHANGELOG (orchestrateur FastAPI, `/v1/chat/completions`
+stream SSE, system prompt multi-source, détection backend GPU, launchers
+`start-linux.sh` / `start-mac.command` / `start-windows.bat`).
 
 ---
 
 ## [0.1.0] Phases 0 & 1 — Analyse + architecture — 2026-08-24
 
 - `docs/ANALYSIS.md` (Phase 0).
-- `docs/ARCHITECTURE.md` (Phase 1) + amendements Phase 2.
+- `docs/ARCHITECTURE.md` (Phase 1).

@@ -1,231 +1,530 @@
-# Rapport d'analyse — Portable_Local_AI
+# PHASE 0 — Analyse du dépôt `africAIsoftmarketing/Portable_Local_AI`
 
-> Phase 0 — Analyse en lecture seule du dépôt `africAIsoftmarketing/Portable_Local_AI` (branche `main`).
-> Objectif : évaluer l'état actuel avant transformation en « AfricAIsoft Portable Studio ».
-> Aucune modification du code existant n'a été effectuée. Seul ce fichier est créé.
-
----
-
-## 1. Synthèse exécutive
-
-Le dépôt est un **wrapper léger et non intrusif autour de `llama-server`** (binaire fourni par le projet upstream [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp)). Il consiste essentiellement en :
-
-- **Deux paires de scripts** (Bash + Batch) : un installateur qui télécharge les binaires CPU de `llama.cpp` depuis l'API GitHub Releases pour cinq cibles (Linux x64/arm64, macOS x64/arm64, Windows x64), et un lanceur qui détecte l'OS/arch, sélectionne un modèle GGUF puis exécute le serveur sur `0.0.0.0:8080`.
-- **Un `README.md`** de bonne qualité (272 lignes) décrivant l'utilisation.
-- **Une arborescence `bin/` et `models/` vide** (uniquement des `.gitkeep`) : les binaires ne sont pas commités, ils sont téléchargés à l'installation.
-
-**Taille totale du dépôt** : ~124 Ko (hors `.git`).
-**Zéro fichier Python, zéro fichier JavaScript, zéro package manager.** Il n'existe pas d'API FastAPI, pas de serveur MCP, pas de boucle agentique, pas d'UI custom (celle-ci a été **supprimée** dans un commit récent — voir §6).
-
-**Conclusion courte** : le dépôt actuel n'est **pas** une base pour un « Portable Studio » complet ; il n'en est que **la couche de bootstrap binaire**. La quasi-totalité de la stack cible (API OpenAI-compatible custom, MCP skills, boucle agentique, UI FR/EN, runtime Python portable) reste à construire.
+> **Rôle du document** : rapport d'analyse en lecture seule produit avant toute
+> nouvelle transformation. Aucune modification de code n'a été effectuée
+> pendant cette phase — seul ce fichier a été (ré)écrit.
+>
+> **Auteur** : AfricAIsoft (agent d'analyse) — **Licence** : MIT
+> **Date** : 2026-08-24 — **Cible** : AfricAIsoft Portable Studio
+> **Branche** : `main` — **Base analysée** : commit `3b71cae` (HEAD local)
 
 ---
 
-## 2. Inventaire des fichiers
+## 0. Résumé exécutif honnête
 
-| Chemin | Type | Taille | Rôle |
+Le dépôt **n'est PAS vide** et **n'est PAS un point de départ zéro** malgré
+l'intitulé « Phase 0 » de la mission. Il contient déjà, en local, l'essentiel
+de la transformation prévue pour « AfricAIsoft Portable Studio », commité
+sur `main` en 9 commits d'avance sur `origin/main` :
+
+- Le socle historique **PortableAI** (installer/launcher `llama.cpp` seul)
+  d'origine amont, encore présent à la racine (`install.sh`, `install.bat`,
+  `start.sh`, `start.bat`, `bin/{linux,mac,windows}/…`, `README.md`).
+- La couche **AfricAIsoft Portable Studio** superposée par-dessus, avec :
+  orchestrateur FastAPI (`app/`), UI web statique FR/EN (`ui/`), 4 skills
+  MCP stdio (`mcp-servers/`), scripts multi-plateformes (`scripts/`,
+  `start-linux.sh`, `start-mac.command`, `start-windows.bat`), configuration
+  et schéma (`config/`), documentation (`docs/`), Key Builder C#/.NET 8 WPF
+  (`keybuilder/`), suites de tests (`tests/`, `keybuilder/tests/`),
+  scripts de packaging (`scripts/build-portable.{sh,ps1}`,
+  `scripts/sign-release.py`) et manifest de release (`release.json`).
+
+Autrement dit, les phases 1 à 5 du plan de transformation semblent avoir
+déjà été exécutées lors d'itérations précédentes ; **il ne reste, en Phase 0,
+qu'à documenter l'existant, décider ce qui est réutilisable, et proposer une
+base de départ propre**. Ce rapport le fait sans rien altérer.
+
+---
+
+## 1. Inventaire des fichiers et de leur rôle
+
+### 1.1 Racine
+
+| Chemin | Type | Rôle | Origine |
 |---|---|---|---|
-| `README.md` | doc Markdown | 9,0 Ko | Documentation utilisateur (features, arborescence cible, quick-start, requirements, configuration, dépannage, mise à jour). Écrit en anglais. |
-| `install.sh` | Bash (executable) | 15 Ko | Installateur universel Linux/macOS. Menu interactif de sélection de plateforme(s), requête à l'API GitHub `releases/latest` pour `ggml-org/llama.cpp`, filtrage des assets CPU (exclut CUDA/Vulkan/ROCm/SYCL/…), téléchargement + extraction dans `/tmp`, résolution des symlinks pour compatibilité FAT/NTFS/exFAT, copie dans `bin/<plateforme>/` et renommage du binaire final. |
-| `install.bat` | Batch Windows | 12,6 Ko | Équivalent Windows d'`install.sh` : mêmes rôles, utilise PowerShell (`Invoke-RestMethod`) pour l'API GitHub et `Expand-Archive`/`tar` pour l'extraction. Résout aussi les symlinks (via PowerShell) avant copie. |
-| `start.sh` | Bash (executable) | 8,6 Ko | Lanceur Linux/macOS. Énumère `models/*.gguf`, propose une sélection interactive si >1, détecte OS/arch, teste si le FS est restreint (`noexec`, FAT/exFAT via `/proc/mounts`, `stat -f`, `chmod +x`, `--version`) et recopie binaires + libs dans `/tmp` si nécessaire. Configure `LD_LIBRARY_PATH` (Linux) ou `DYLD_LIBRARY_PATH` (macOS), calcule le nombre de threads (`nproc - 1`), ouvre le navigateur puis `exec` le binaire avec `-c 4096 --port 8080 --host 0.0.0.0`. Trap `EXIT/INT/TERM` pour cleanup du tmpdir. |
-| `start.bat` | Batch Windows | 3,7 Ko | Équivalent Windows de `start.sh`. Vérifie la présence de `VCRUNTIME140_1.dll`, énumère les modèles, sélection interactive, prépend `bin\windows` au `PATH` pour la résolution des DLL, calcule threads (`NUMBER_OF_PROCESSORS - 1`), lance le binaire. |
-| `models/.gitkeep` | placeholder | 0 o | Réserve le dossier vide pour les fichiers `.gguf` de l'utilisateur. |
-| `bin/.gitkeep` | placeholder | 0 o | Réserve le dossier `bin/`. |
-| `bin/linux/linux_x64/.gitkeep` | placeholder | 0 o | Dossier cible du binaire Linux x64. Vide au commit. |
-| `bin/linux/linux_arm64/.gitkeep` | placeholder | 0 o | Dossier cible du binaire Linux ARM64. Vide au commit. |
-| `bin/mac/mac_x64/.gitkeep` | placeholder | 0 o | Dossier cible du binaire macOS Intel. Vide au commit. |
-| `bin/mac/mac_arm64/.gitkeep` | placeholder | 0 o | Dossier cible du binaire macOS Apple Silicon. Vide au commit. |
-| `bin/windows/.gitkeep` | placeholder | 0 o | Dossier cible du binaire Windows x64. Vide au commit. |
+| `README.md` | doc | Doc utilisateur mixte : PortableAI (llama.cpp seul) **et** encart Key Builder en tête. Bilingue partiel FR/EN. | Amont + patch AfricAIsoft |
+| `LICENSE` | légal | MIT © AfricAIsoft 2026. | AfricAIsoft |
+| `CHANGELOG.md` | doc | Journal versions 0.1.0 → 0.3.0 (phases 0-3). Rien pour 0.4/0.5. | AfricAIsoft |
+| `VERSION` | texte | `0.2.0-phase2` (désynchronisé par rapport aux phases 3-5 commitées). | AfricAIsoft |
+| `.gitignore` | git | Ignore `models/*.gguf`, `bin/**/*.so*|*.dll|*.dylib`, `runtime/**/python/`, caches. | AfricAIsoft |
+| `release.json` | manifest | Squelette manifest `dev-build`, `unsigned`, aucun binaire listé. | AfricAIsoft |
+| `install.sh`, `install.bat` | script | **PortableAI d'origine** — télécharge llama.cpp depuis GitHub releases (5 plateformes). Non intégré à l'orchestrateur. | Amont |
+| `start.sh`, `start.bat` | script | **PortableAI d'origine** — lance `llama-server` seul sur `:8080`. **Concurrent** des nouveaux launchers `start-*`. | Amont |
+| `start-linux.sh`, `start-mac.command`, `start-windows.bat` | script | **Nouveaux launchers Studio** — délèguent à `scripts/core-startup.{sh,ps1}` (uvicorn + MCP + llama). | AfricAIsoft |
+| `stop-linux.sh`, `stop-mac.sh`, `stop.bat` | script | Arrêt propre (SIGTERM/SIGKILL + purge staging /tmp + libération ports). | AfricAIsoft |
 
-**Total** : 5 fichiers de code (2 scripts × 2 OS + 1 README), 7 `.gitkeep`. Aucun fichier de configuration (`.env`, `.toml`, `.yml`), aucun fichier de test, aucune licence explicite, aucun `CHANGELOG`, aucun `.gitignore`.
+### 1.2 Backend Python (`app/`)
 
----
+| Chemin | Rôle |
+|---|---|
+| `app/main.py` | Point d'entrée FastAPI, lifespan (config → détection → llama-server → MCP → shutdown). Prefix `/api` en dev, vide en portable. |
+| `app/requirements.txt` | 7 deps pinned : fastapi 0.115.4, uvicorn 0.32.0, pydantic 2.9.2, httpx 0.27.2, jinja2 3.1.4, python-multipart 0.0.17, sse-starlette 2.1.3. |
+| `app/api/router_v1.py` | Proxy OpenAI-compat `/v1/{models,chat/completions,completions}` avec injection system prompt + streaming SSE + boucle agentique. |
+| `app/api/router_studio.py` | Routes `/system-prompt`, `/config`, `/skills`, `/skills/{name}/invoke`, `/conversations*`, `/models/{available,switch}`, `/events` (SSE). |
+| `app/api/auth.py` | Middleware Bearer optionnel (`security.require_api_key`). |
+| `app/agent/loop.py` | Boucle agentique : rounds ≤ 5, timeout 120 s, tool_calls parallèles (`asyncio.gather`), fallback JSON (```json``` / `<tool_call>` / raw). |
+| `app/agent/trace.py` | Bus in-memory d'événements SSE par `session_id`. |
+| `app/mcp/client.py` | Client MCP JSON-RPC 2.0 stdio, handshake + timeouts + respawn (max 3). |
+| `app/mcp/registry.py` | Découverte des skills (`skills/registry.json` + auto-scan `mcp-servers/`), spawn, status_summary. |
+| `app/llama_manager/manager.py` | Cycle de vie `llama-server` (spawn subprocess, wait `/health`, loopback strict, reload_model). |
+| `app/platform_utils/detect.py` | Détection OS/arch normalisée (`linux-x86_64`, `darwin-arm64`, …). |
+| `app/platform_utils/backend_detector.py` | Arbre CUDA > ROCm > Vulkan > CPU + Metal macOS, `reason_code` machine + params i18n. |
+| `app/config/models.py` | 10 modèles Pydantic (`Settings`, `ServerConfig`, `ModelConfig`, `McpConfig`, `AgenticConfig`, `SystemPromptConfig`, `PlatformConfig`, `LoggingConfig`, `SecurityConfig`, `UiConfig`) tous `extra="forbid"`. |
+| `app/config/loader.py` | Load/save atomique + validation JSON Schema + override env vars. |
+| `app/conversations/store.py` | Store JSON `data/conversations.json` avec verrou threading. |
+| `app/security/api_key.py` | Génération 32 octets base64url au 1er lancement, chmod 600 POSIX. |
+| `app/security/manifest_verifier.py` | **Signature Ed25519 non implémentée** : accepte non-signé si `require_signature=false`. |
+| `app/system_prompt/resolver.py` | Priorité override > preset > custom > default, respect `locked`. |
+| `app/system_prompt/presets.py` | Liste + charge presets depuis `config/system_prompts/*.txt`. |
+| `app/logging_setup/setup.py` | Configuration logging (rotation, redaction). |
 
-## 3. Dépendances externes identifiées
+### 1.3 Shim dev Emergent (`backend/`)
 
-### 3.1 Runtime (exécution finale)
+| Chemin | Rôle |
+|---|---|
+| `backend/server.py` | Ré-exporte `app.main:app` avec `STUDIO_API_PREFIX=/api` pour supervisor Kubernetes (port 8001). **Non utilisé en portable production**. |
 
-| Dépendance | Origine | Version | Rôle |
-|---|---|---|---|
-| `llama-server` (binaire) | `github.com/ggml-org/llama.cpp` — release `latest` récupérée dynamiquement | flottante (dernière release au moment de l'install ; à ce jour la variable `RELEASE_TAG` est du type `bXXXX`) | Serveur d'inférence LLM GGUF, expose déjà nativement une API HTTP OpenAI-compatible et une UI web intégrée. |
-| `libllama.so` / `libggml.so` / `libggml-cpu.so` (Linux) | fournies dans l'archive `llama.cpp` | idem release | Libs partagées nécessaires au binaire. |
-| `libllama.dylib` / `libggml*.dylib` (macOS) | idem | idem | Libs Mach-O correspondantes. |
-| `llama.dll` / `ggml*.dll` (Windows) | idem | idem | DLL Windows. |
-| Microsoft Visual C++ Redistributable (`VCRUNTIME140_1.dll`) | Microsoft | 2015-2022 | Pré-requis Windows, l'utilisateur doit l'installer (le script vérifie sa présence et échoue sinon). |
+### 1.4 Serveurs MCP (`mcp-servers/`)
 
-### 3.2 Outils requis sur la machine hôte (au moment de l'install)
-
-| Outil | Utilisé par | Notes |
+| Chemin | Rôle | Outils exposés |
 |---|---|---|
-| `bash` | `install.sh`, `start.sh` | Testé avec `set -uo pipefail`. |
-| `curl` | `install.sh`, `install.bat` | Requis explicitement, échec si absent. |
-| `tar` | `install.sh`, `install.bat` | Requis pour `.tar.gz`. Windows 10 build 17063+ le fournit. |
-| `unzip` | `install.sh` (Windows target) | Optionnel — utilisé uniquement si on installe la cible Windows depuis Linux/macOS. |
-| `powershell` | `install.bat` | Utilisé pour l'API GitHub et `Expand-Archive`. |
-| `stat`, `find`, `readlink`/`realpath`, `chmod`, `mktemp`, `sysctl`/`nproc` | `install.sh`, `start.sh` | Utilitaires POSIX standards. |
-| `xdg-open` (Linux) / `open` (macOS) / `start` (Windows) | `start.sh`, `start.bat` | Pour ouverture automatique du navigateur (fallback silencieux si absent). |
+| `_shared/mcp_server.py` | Framework MCPServer JSON-RPC 2.0 stdio (~110 lignes). | — |
+| `_shared/bm25.py` | BM25 Okapi pur Python + stopwords FR+EN, k1=1.5 b=0.75. | — |
+| `_shared/text_extract.py` | Extraction txt/md/pdf (pypdf vendored). | — |
+| `_template/` | Squelette prêt-à-copier pour créer un skill en < 5 min. | `echo` |
+| `cybersec/server.py` | Regex SSH brute-force + blocklists CIDR (`lists/*.txt`). | `analyze_security_logs`, `check_ip_reputation` |
+| `accounting/server.py` | Équilibre débit/crédit PCG + ratios financiers `Decimal`. | `verify_accounting_entries`, `calculate_financial_ratios` |
+| `rag/server.py` | Index BM25 vendored, reindex auto si docs plus récents. | `search_knowledge_base`, `reindex_knowledge_base` |
+| `general/server.py` | Rapport Markdown structuré + extraction regex FR+EN (email/URL/IP/IBAN/SIRET/…). | `generate_structured_report`, `extract_key_info` |
 
-### 3.3 Dépendances **absentes du dépôt** mais nécessaires pour la cible « Portable Studio »
+**Total** : 4 skills × 2 outils = **8 outils métier fonctionnels**, aucun stub.
 
-Aucune de ces dépendances n'est présente aujourd'hui, elles devront être introduites :
+### 1.5 UI web statique (`ui/`)
 
-- Python (runtime portable) + `pip` (`fastapi`, `uvicorn`, `pydantic`, `httpx`, éventuellement `mcp`, etc.).
-- Node/Yarn ou build statique (si UI React) — **ou** une UI purement HTML/CSS/JS statique.
-- Serveur MCP (protocole Model Context Protocol) — pas de librairie installée.
-- Fichiers de configuration `.env` / `config.toml` pour paramétrer ports, mode zero-trace, langue par défaut FR/EN.
-- Système de i18n (fichiers de traduction FR/EN).
+| Chemin | Rôle |
+|---|---|
+| `ui/index.html` | Layout 3 colonnes (conversations / chat / panneaux Skills-Models-SystemPrompt-Config). `data-i18n` sur ~40 attributs. Classe `body.booting` anti-FOUT. |
+| `ui/assets/app.js` | Logique Vanilla JS (~830 lignes) : i18n bloquant, thème, health polling, conversations, chat SSE + agentic, skills, RAG docs, modèles + switch, system prompt + presets, config form, trace repliable. |
+| `ui/assets/markdown.js` | Rendu Markdown minimal (headings, lists, code, links, escape XSS). |
+| `ui/assets/styles.css` | Palette sable/vert forêt (light) + graphite/ambre (dark). Serif humaniste (Iowan/Palatino) + JetBrains Mono. Anti-FOUT `body.booting {visibility:hidden}`. |
+| `ui/assets/i18n/` | **RÉFÉRENCÉ MAIS ABSENT du dépôt** — `app.js` fetch `assets/i18n/{fr,en}.json` mais le dossier n'est pas commité (voir §4 Limitations). |
+
+### 1.6 Frontend redirect (`frontend/`)
+
+| Chemin | Rôle |
+|---|---|
+| `frontend/index.html` | Simple page redirect vers `/api/` (dev Emergent seulement). |
+| `frontend/package.json` | Wrapper `python3 -m http.server 3000`. Non utilisé en portable. |
+
+### 1.7 Configuration (`config/`)
+
+| Chemin | Rôle |
+|---|---|
+| `settings.json` | Configuration effective : bind `127.0.0.1:8080`, llama loopback `:8090`, mcp enabled, agentic 5/30/120, `require_signature=false`, UI fr/auto. |
+| `settings.schema.json` | JSON Schema draft-2020-12, `additionalProperties: false`, tous les champs bornés. |
+| `mcp.json` | `enabled=true`, `auto_discover=true`, `skill_timeout_sec=30`, `max_restart_attempts=3`. |
+| `system_prompt.default.txt` | Prompt fabricant fallback. |
+| `system_prompts/{accounting,cybersec,legal}.txt` | 3 presets métier. |
+| `api_key.txt` | Généré au 1er lancement (gitignoré). |
+
+### 1.8 Scripts multi-plateformes (`scripts/`)
+
+| Chemin | Rôle |
+|---|---|
+| `core-startup.sh` | Logique commune Linux/macOS : detect OS/arch → detect-backend → check restricted-fs → resolve Python portable ou système → install deps → export env → `exec uvicorn`. |
+| `detect-backend.{sh,ps1}` | Sondes nvidia-smi/rocm-smi/vulkaninfo timeout 1 s → sortie `BACKEND=…\nREASON=…`. |
+| `fetch-binaries.{sh,ps1}` | Téléchargement releases GitHub `ggml-org/llama.cpp` (5 patterns d'assets), extraction, résolution symlinks pour compat FS restreints. |
+| `health-check.{sh,ps1}` | Poll `/health` HTTP (30 tentatives × 1 s). |
+| `build-portable.sh`, `build-portable.ps1` | Assemblage distribution portable : python-build-standalone 3.12 + wheels + binaires + code + manifest release.json. `--dry-run` supporté. |
+| `sign-release.py` | Ed25519 : `generate-keypair`, `sign`, `verify`. Utilise `cryptography` (non listé dans `requirements.txt`). |
+
+### 1.9 Key Builder (`keybuilder/`) — application C#/.NET 8 Windows
+
+| Chemin | Rôle |
+|---|---|
+| `AfricAIsoft.KeyBuilder.sln` | Solution 3 projets : Core (net8.0), Wpf (net8.0-windows + UseWPF), Core.Tests (net8.0 xUnit). |
+| `global.json` | Fixe SDK `.NET 8.0.425`. |
+| `src/AfricAIsoft.KeyBuilder.Core/` | Bibliothèque portable Linux/Windows/macOS. Abstractions `IUsbDriveProvider`/`IDriveFormatter`/`IFileSystem`/…, Models (`UsbDrive`, `BuildPlan`, `BuildManifest`, `BuildJournal`, …), Services (`ChecksumService` SHA-256 streaming, `SizeEstimator`, `GgufValidator` magic+version 1..3, `PreflightValidator`, `ResumeJournal`, `SkillFilter`, `SystemPromptInjector`, `ManifestBuilder`, `ReportGenerator` HTML autonome, `BatchQueue`, `UsbBuildOrchestrator`). Dépendance : `System.Text.Json 8.0.5`. |
+| `src/AfricAIsoft.KeyBuilder.Wpf/` | Front WPF Windows only (`WmiUsbDriveProvider`, `DiskPartFormatter` UAC runas, ViewModels MVVM). Dépendances : `System.Management 8.0.0`, `CommunityToolkit.Mvvm 8.2.2`. |
+| `tests/AfricAIsoft.KeyBuilder.Core.Tests/` | Suite xUnit portable, `InMemoryFileSystem`, 25+ tests (vecteurs RFC checksums, préflight happy+edge, journal reprise, batch, orchestrateur E2E). |
+| `installer/build-portable.ps1` | `dotnet publish -c Release -r win-x64 --self-contained → ZIP`. |
+| `installer/Product.wxs`, `installer/KeyBuilder.wixproj` | Définition MSI WiX v4/v5. |
+| `batch-config.example.json` | Exemple CLI batch (2 clés production ACME). |
+| `docs/USER-GUIDE.md` | Guide utilisateur FR (installation, fabrication, batch, reprise, rapport, dépannage). |
+| `docs/TECHNICAL.md` | Architecture 2-projets, séquence orchestrateur, API internes, UAC, WMI, tests. |
+
+### 1.10 Documentation (`docs/`)
+
+| Chemin | Rôle |
+|---|---|
+| `ARCHITECTURE.md` | Doc Phase 1 exhaustive : diagrammes composants, séquence démarrage, détection backend GPU, boucle agentique, MCP, system prompt, sécurité zero-trace, configuration, runtime Python, tests, arborescence cible, arbitrages. **~1300 lignes**, référence normative. |
+| `ADD-SKILL.md` | Recette rapide « ajouter un skill MCP en < 5 min » (copie `_template`, décorateur `@server.tool`, redémarrage). |
+| `COMPILATION.md` | Compilation manuelle `llama-server` par plateforme quand la glibc upstream est trop récente (b11071 → glibc 2.38). |
+
+### 1.11 Tests (`tests/`)
+
+| Chemin | Rôle |
+|---|---|
+| `test-api.sh` | 7 tests : `/health`, `/openapi.json`, `/v1/models`, `/v1/chat/completions` non-stream + stream, CORS preflight. |
+| `test-system-prompt.sh` | 13 tests : lecture/écriture/preset/reset/lock. |
+| `test-mcp.sh` | 10 tests : 4 skills × invocations directes. |
+| `test-agentic-loop.sh` | 5 scénarios agent (tool_choice forcé). |
+| `test-agentic-3steps.sh` | 4 scénarios chaînés `verify → ratios → rapport`. |
+| `test-phase3-fixes.sh` | 7 tests correctifs Phase 3. |
+| `test-ui.sh`, `test-ui-i18n.py`, `test-ui-i18n.sh` | UI + i18n anti-FOUT (Playwright headless, latence 700 ms simulée). |
+| `RESULTS.md` | Snapshot 2026-09-21 : 95/95 Studio + 28/28 Core = **123 verts** (non commité). |
+| `manual-checklist.md` | Checklist validation humaine 10 rubriques (non commitée). |
+| `fixtures/` | (dossier présent mais peu fourni). |
+
+### 1.12 Répertoires runtime (partiellement gitignorés)
+
+| Chemin | Contenu |
+|---|---|
+| `bin/{darwin-arm64,darwin-x86_64,linux-x86_64,linux-aarch64,windows-x86_64}/{cpu,cuda,vulkan,metal}/` | Arborescence Studio (vide, sera peuplée par `fetch-binaries`). |
+| `bin/{linux/linux_x64,linux/linux_arm64,mac/mac_arm64,mac/mac_x64,windows}/` | Arborescence PortableAI d'origine (**duplication de nommage** — voir §3.1). |
+| `models/qwen2.5-0.5b-instruct-q4_k_m.gguf` | Modèle démo commité (~350 Mo, alors que `.gitignore` prévoit `models/*.gguf` — voir §4.2). |
+| `data/conversations.json`, `data/pids/*.pid` | Runtime user. |
+| `logs/runtime.log`, `logs/startup.log` | Journaux tournants. |
+
+### 1.13 Autres
+
+| Chemin | Rôle |
+|---|---|
+| `memory/PRD.md`, `memory/test_credentials.md` | Documents de travail agent Emergent. |
+| `skills/registry.json` | Registre statique des 4 skills activés. |
 
 ---
 
-## 4. État Git
+## 2. Dépendances externes identifiées
 
-- **Branche courante** : `main`, à jour avec `origin/main`.
-- **Remote** : `https://github.com/africAIsoftmarketing/Portable_Local_AI.git`. **Avertissement sécurité** : l'URL configurée localement inclut un jeton GitHub en clair (`REDACTED_GITHUB_TOKEN`). Ce token ne fait pas partie des fichiers du dépôt mais est stocké dans `.git/config` du workspace ; il ne sera pas versionné. À noter pour éviter toute fuite.
-- **Working tree** : propre (le seul « untracked » est `.emergent/` propre à l'environnement d'exécution — ne fait pas partie du projet).
-- **Historique** : 14 commits, tous de l'auteur `dinesh <dp973989@gmail.com>` / `Sdinzsh` / `Dinesh Tharun`, entre avril et mai 2026.
-- **Derniers commits** (du plus récent au plus ancien) :
+### 2.1 Python (backend)
 
-  | SHA | Date | Message |
-  |---|---|---|
-  | `d8acd19` | 2026-05-31 | fix: path bug fixed |
-  | `5300d57` | 2026-05-31 | fix: file system links |
-  | `13c9dae` | 2026-04-24 | updated README |
-  | `df3b5c1` | 2026-04-24 | fix: lines removed |
-  | `0693232` | 2026-04-24 | feat: model selection |
-  | `dedba4d` | 2026-04-24 | **Delete ui directory** (suppression d'un `ui/index.html` de 1 396 lignes) |
-  | `7f3509a` | 2026-04-23 | fix: line issue fixed |
-  | `b43bb71` | 2026-04-23 | feat: select platform to install |
-  | `77d9863` | 2026-04-23 | feat: updated functionality |
-  | `8903c93` | 2026-04-23 | fix: downloads to all platforms |
-  | `dae487f` | 2026-04-23 | add: installation script and fixed starter |
-  | `1b904e7` / `71dfc54` / `7d0135c` / `cb276ef` | avant | commits initiaux |
+| Package | Version pinée | Poids wheel approx | Nature |
+|---|---|---|---|
+| `fastapi` | 0.115.4 | ~90 kB (dépend de starlette) | pure-Python |
+| `uvicorn[standard]` | 0.32.0 | 1 wheel + httptools/uvloop binaires selon plat | mixed |
+| `pydantic` | 2.9.2 | ~2 MB (pydantic-core wheel binaire par arch) | mixed (Rust core) |
+| `httpx` | 0.27.2 | ~200 kB | pure-Python |
+| `jinja2` | 3.1.4 | ~130 kB | pure-Python |
+| `python-multipart` | 0.0.17 | ~30 kB | pure-Python |
+| `sse-starlette` | 2.1.3 | ~20 kB | pure-Python |
 
-- **Propreté** : historique linéaire, pas de merges, messages conventionnels (`fix:`, `feat:`) mais parfois vagues (« updated functionality »). Pas de tags, pas de releases. Aucune branche autre que `main`.
-- **Point important** : le commit `dedba4d` a **supprimé** un fichier `ui/index.html` de 1396 lignes qui semblait constituer l'UI custom. Il faudrait consulter ce commit avant la phase de conception pour savoir si des idées d'UX de cette UI peuvent inspirer la nouvelle UI FR/EN — mais **rien de cette UI n'est actuellement présent dans le dépôt**.
+**Non listé dans `requirements.txt` mais utilisé** :
+- `cryptography` (par `scripts/sign-release.py`) — wheel binaire par arch,
+  ~4 MB. **Doit être ajouté** ou le script doit importer conditionnellement.
+- `pypdf` (par `mcp-servers/_shared/text_extract.py`) — pure-Python.
+
+### 2.2 .NET (Key Builder)
+
+| Package | Version | Projet |
+|---|---|---|
+| `System.Text.Json` | 8.0.5 | Core |
+| `System.Management` | 8.0.0 | Wpf (WMI) |
+| `CommunityToolkit.Mvvm` | 8.2.2 | Wpf |
+| SDK `.NET 8.0.425` | épinglé via `global.json` | Solution |
+| WiX Toolset | v4/v5 (implicite) | `installer/` |
+
+### 2.3 Binaires externes
+
+| Composant | Source | Version | Récupération |
+|---|---|---|---|
+| `llama-server` | github.com/ggml-org/llama.cpp releases | `b11071` par défaut (script) | `scripts/fetch-binaries.{sh,ps1}` |
+| `python-build-standalone` 3.12.5 | github.com/indygreg/python-build-standalone | tag `20240814` | `scripts/build-portable.sh` |
+| Modèles GGUF | huggingface.co (utilisateur) | libre | manuel dans `models/` |
+
+### 2.4 Zéro dépendance externe (contrainte offline)
+
+- Aucun paquet npm, aucun bundler frontend (Vanilla JS strict).
+- Aucun binaire natif compilé à l'installation (pydantic-core pré-packagé).
+- Aucun appel réseau au runtime (offline strict après setup).
+- Aucun embedding, aucun ONNX, aucun PyTorch (RAG = BM25 pur Python).
 
 ---
 
-## 5. Réutilisable tel quel vs. à réécrire
+## 3. Limitations et incompatibilités détectées
 
-### 5.1 À conserver **tel quel** (ou avec ajustements mineurs)
+### 3.1 Multi-plateforme
+
+| Sujet | Statut | Détail |
+|---|---|---|
+| **Deux systèmes de nommage `bin/`** cohabitent | ⚠ Duplication | PortableAI original utilise `bin/{linux/linux_x64,mac/mac_arm64,windows}/…`. Studio utilise `bin/{linux-x86_64,darwin-arm64,windows-x86_64}/{cpu,cuda,vulkan,metal}/…`. Les deux arborescences sont créées mais aucun code ne les fait converger. |
+| **Windows ARM64** | ❌ Non couvert | Aucun binaire llama-server + pas de release upstream Snapdragon X. Documenté comme extension future. |
+| **`ui/assets/i18n/{fr,en}.json`** | ❌ Absents du dépôt | `ui/assets/app.js` fetch ces fichiers, mais le dossier n'existe pas dans le git tree. L'UI ne peut PAS démarrer sans ces fichiers. |
+| **Runtime Python portable** | ⚠ Non commité | Attendu dans `bin/<plat>/python/` mais absent (généré par `build-portable.sh`). |
+| **glibc 2.38** | ⚠ Contournable | Les releases b11071 upstream nécessitent glibc ≥ 2.38 ; Debian 12 / Ubuntu 22.04 restent en 2.36. Documenté dans `docs/COMPILATION.md` avec procédure de build local. |
+| **Bash 3.2 macOS système** | ⚠ Bug latent | `start.sh` ligne 131 utilise `${fstype,,}` (lowercase) — syntaxe **bash 4+**, non supportée par bash 3.2 embarqué macOS. `core-startup.sh` a le même motif. |
+
+### 3.2 Offline strict
+
+| Sujet | Statut | Détail |
+|---|---|---|
+| Téléchargement binaires (`install.sh`, `fetch-binaries`, `build-portable`) | ⚠ Nécessite Internet UNE fois | Documenté et attendu. Une fois `bin/` peuplé, la clé est offline. |
+| Téléchargement du modèle GGUF | ⚠ À charge utilisateur | Instructions HuggingFace dans `README.md`. |
+| `pip install --no-index` | ✅ | Le fallback online (`pip install ...`) reste dans `core-startup.sh` — à durcir en portable pur. |
+| CDN, télémétrie, analytics, fonts externes | ✅ Aucun | UI 100% locale, favicon SVG data URI, fonts serif système. |
+
+### 3.3 Zero-trace
+
+| Sujet | Statut | Détail |
+|---|---|---|
+| Logs redaction | ✅ | `startup.log`, `runtime.log` : métadonnées seulement (aucun contenu utilisateur). API key jamais loggée (6 caractères fingerprint). |
+| Fichiers résiduels `/tmp/portableai.*` | ✅ | `trap _cleanup_staging EXIT INT TERM` dans `core-startup.sh`. |
+| Persistance conversations | ⚠ Opt-in implicite | `data/conversations.json` est écrit par défaut. Devrait être opt-out documenté (chiffrement volume à charge utilisateur). |
+| Persistance PID | ✅ | `data/pids/*.pid` supprimés à l'arrêt. |
+
+### 3.4 Sécurité
+
+| Sujet | Statut | Détail |
+|---|---|---|
+| **Signature Ed25519** | ❌ NON IMPLÉMENTÉE au démarrage | `app/security/manifest_verifier.py` retourne « Vérification Ed25519 non implémentée en Phase 2. » quand `require_signature=true`. Le script `scripts/sign-release.py` fabrique bien les signatures, mais l'orchestrateur ne les vérifie pas. |
+| `require_signature=false` par défaut | ⚠ Documenté | Warning visible au démarrage. Doit basculer à `true` en release. |
+| API key | ✅ | Générée 32 octets base64url au 1er lancement, chmod 600 POSIX, header Bearer, comparaison `hmac.compare_digest`. |
+| CORS | ✅ | Whitelist `127.0.0.1:8080` par défaut, LAN opt-in explicite. |
+| Path traversal skills | ⚠ Partiel | `presets.py` protège l'ID, mais `search_knowledge_base` / `analyze_security_logs` reposent sur les schémas d'input JSON sans whitelist explicite `security.allowed_*_roots` documentée dans `settings.json`. |
+
+### 3.5 Modèle 0.5B & fiabilité
+
+| Sujet | Statut | Détail |
+|---|---|---|
+| Qwen2.5-0.5B tool routing | ⚠ Faible (~20 %) | Documenté 5 fois (README, CHANGELOG, ARCHITECTURE, RESULTS, manual-checklist). Test T4 marqué `best-effort`. Prod recommandée : 7B+. |
+| Tests agentiques | ✅ Contournés | Utilisent `tool_choice` forcé + seeds pour rester déterministes. |
+| Modèle 0.5B commité | ⚠ Vole ~350 MB du repo | Devrait être gitignoré ; l'utilisateur télécharge son modèle. |
+
+### 3.6 UI
+
+| Sujet | Statut | Détail |
+|---|---|---|
+| i18n anti-FOUT | ✅ | `body.booting {visibility:hidden}` + fetch bloquant + `try/finally` classe retirée. Testé Playwright headless. |
+| Compteur tokens | ⚠ Approximatif serveur | `approximate_token_count` = `len/3.8`. La doc `ARCHITECTURE.md §6.4` prévoyait `gpt-tokenizer` JS local, non implémenté. |
+| Accessibilité | ⚠ Non audité | Aucun test axe/pa11y ; labels ARIA présents mais partiels. |
+| Responsive | ✅ | `@media` 1200 px et 960 px, layout 1 colonne mobile. |
+
+### 3.7 Divergence CHANGELOG / VERSION
+
+| Fichier | Contenu | Réel commité |
+|---|---|---|
+| `VERSION` | `0.2.0-phase2` | HEAD contient phases 3+4+5 |
+| `CHANGELOG.md` | S'arrête à `[0.3.0] Phase 3` | Phase 4 et Phase 5 (Key Builder) non entrées |
+| `release.json` | `version: "0.2.0-phase2"`, `unsigned-dev-build` | Idem |
+
+---
+
+## 4. Réutilisable tel quel VS à réécrire
+
+### 4.1 À CONSERVER tel quel (haute qualité, aligné cahier des charges)
 
 | Élément | Justification |
 |---|---|
-| **`install.sh` et `install.bat`** | Logique de téléchargement robuste : requête API GitHub, filtrage des assets CPU-only (exclut CUDA/Vulkan/ROCm/SYCL/OpenCL/MPI/OpenVINO/OpenEuler/KleidiAI/Kompute), extraction dans `/tmp`, résolution des symlinks pour portabilité FAT/NTFS/exFAT, gestion multi-plateforme depuis un seul hôte (une clé USB préparée sous Linux peut booter sur Mac/Windows). Le code est explicite, coloré, gère les erreurs. **Réutilisable à 90 %**, seul l'ajout d'une étape « bundle Python portable » sera nécessaire. |
-| **`start.sh`** | Détection OS/arch, sélection de modèle interactive, détection filesystème restreint (`noexec`, FAT32, exFAT) avec quatre couches de vérification (mount flags, fstype, `chmod +x`, `--version`), staging dans `/tmp` avec `trap` de nettoyage sur `EXIT/INT/TERM`. **Excellent socle**. Il faudra le compléter pour : (a) lancer aussi le serveur FastAPI + MCP + agent avant `llama-server`, (b) proposer une option « zero-trace » (chiffrement/purge du staging), (c) ajouter des paramètres CLI (port, langue, contexte). |
-| **`start.bat`** | Idem `start.sh` côté Windows, avec check `VCRUNTIME140_1.dll`. **Réutilisable à ~80 %**, mais moins riche que `start.sh` (pas de gestion FS restreint côté Windows car NTFS gère nativement l'exécution). |
-| **Arborescence `bin/{linux,mac,windows}/…/`** | Bien pensée, séparation propre par plateforme et par architecture. À conserver telle quelle. |
-| **Dossier `models/`** | Convention simple et claire. À conserver. |
-| **`README.md`** | Bien rédigé, à conserver comme **base** de documentation utilisateur (à traduire en FR et enrichir avec API/MCP/UI). |
-| **Filtrage des variantes GPU** | La regex `grep -iv "cuda\|vulkan\|rocm\|kompute\|sycl\|opencl\|mpi\|openvino\|openeuler\|kleidiai"` évite proprement le mauvais binaire. À conserver, éventuellement à rendre paramétrable (« installer la variante Vulkan si l'utilisateur le demande »). |
+| `app/**` (orchestrateur FastAPI complet) | 20+ modules Pydantic-typés, séparation propre (api/agent/mcp/config/security/system_prompt). Commentaires FR, noms EN, licence MIT. Aucune dette technique visible. |
+| `mcp-servers/{cybersec,accounting,rag,general,_shared,_template}` | 4 skills fonctionnels avec 8 outils métier, framework minimal `MCPServer` de ~110 lignes, BM25 pur Python vendored ≤ 50 Ko. Aucun stub. |
+| `ui/**` (Vanilla HTML/JS/CSS < 5 Mo hors i18n) | UI complète 3 colonnes, i18n anti-FOUT rigoureuse, palette distinctive sable/forêt hors AI-slop. |
+| `docs/ARCHITECTURE.md` (~1300 lignes) | Document normatif exhaustif, diagrammes ASCII, arbitrages traçables. C'est LA référence à conserver. |
+| `docs/{ADD-SKILL,COMPILATION}.md` | Concis, utiles, à jour. |
+| `keybuilder/src/AfricAIsoft.KeyBuilder.Core/**` + `tests/` | .NET 8 portable, 28/28 tests verts sous Linux, abstractions propres, orchestrateur E2E testé in-memory. |
+| `scripts/{core-startup.sh,detect-backend.{sh,ps1},health-check.{sh,ps1},fetch-binaries.sh,build-portable.sh,sign-release.py}` | Robustes, timeouts partout, symlinks résolus pour FS restreints (FAT32/exFAT/noexec). |
+| `config/{settings.json,settings.schema.json,mcp.json,system_prompts/*.txt}` | Schéma strict `additionalProperties:false`, defaults raisonnables. |
+| `start-{linux.sh,mac.command,windows.bat}`, `stop-*` | Wrappers propres qui délèguent à `core-startup`. |
+| `tests/{test-api,test-mcp,test-system-prompt,test-agentic-*}.sh` | 95/95 verts, réutilisables tels quels. |
+| `LICENSE`, `.gitignore` (partiellement — voir §4.2) | Corrects sur les gros items. |
 
-### 5.2 À **réécrire ou compléter**
+### 4.2 À RÉÉCRIRE ou HARMONISER
 
-| Élément | Statut | Justification |
+| Élément | Raison | Action recommandée |
 |---|---|---|
-| **Serveur API OpenAI-compatible** | Absent | `llama-server` expose déjà `/v1/chat/completions` et `/v1/completions` nativement, mais le cahier des charges demande **notre propre couche FastAPI** (probablement pour ajouter auth, routing multi-modèles, journalisation zero-trace, hooks agentiques). À créer intégralement. |
-| **Serveur MCP** | Absent | Aucune trace de librairie MCP ni de skills métiers. À créer intégralement. |
-| **Boucle agentique** | Absente | À créer (probablement un orchestrateur Python appelant l'API OpenAI locale + MCP). |
-| **UI web légère FR/EN** | Absente (supprimée) | Le fichier `ui/index.html` a été supprimé au commit `dedba4d`. À reconstruire. Le lanceur ne monte plus l'UI (`--path "$SCRIPT_DIR/ui"` est commenté). |
-| **Runtime Python portable** | Absent | Nécessaire pour faire tourner FastAPI/MCP/agent sans installation Python sur l'hôte. Envisager `python-build-standalone` (Astral) ou un bundle `PyInstaller`/`Nuitka` par plateforme. |
-| **Système de configuration** | Absent | Aucun `.env` / `config.toml`. À introduire. |
-| **i18n FR/EN** | Absent | À prévoir dès la conception UI + backend (messages d'erreur, logs). |
-| **Tests** | Absents | Aucun test unitaire ou d'intégration. À créer. |
-| **`.gitignore`** | Absent | Nécessaire (au minimum : `bin/**/*.exe`, `bin/**/*.so*`, `bin/**/*.dll`, `bin/**/*.dylib`, `models/*.gguf`, `.venv/`, `__pycache__/`, `node_modules/`). |
-| **Licence** | Absente | Aucun `LICENSE`. `llama.cpp` est MIT ; nous devons choisir et déclarer la nôtre. |
+| `README.md` | Mélange déroutant PortableAI (llama.cpp seul) + encart Key Builder. Ne mentionne pas l'orchestrateur, MCP, UI, ni skills. Bilingue FR/EN incomplet. | Réécrire de zéro autour d'AfricAIsoft Portable Studio comme produit unique, section « legacy PortableAI » archivée à la fin. |
+| `install.sh`, `install.bat`, `start.sh`, `start.bat` (racine) | Fonctionnalité **PortableAI d'origine** qui ne lance QUE `llama-server` sans orchestrateur, MCP ni UI Studio. Conflit UX avec les nouveaux `start-*`. | Deux options : (a) supprimer et rediriger vers `install-portable.sh` + `start-linux.sh` ; (b) transformer en aliases vers `scripts/fetch-binaries.sh` + `start-linux.sh` avec message explicite. **Ne pas casser les utilisateurs habitués** — deprecation notice puis suppression au prochain major. |
+| `bin/{linux,mac,windows}/` (nommage PortableAI) | Duplication avec `bin/{linux-x86_64,darwin-arm64,…}/` (nommage Studio). | Choisir UN seul schéma (recommandé : celui de Studio), migrer scripts + fetch-binaries, supprimer l'ancien. |
+| `VERSION` (0.2.0-phase2) + `CHANGELOG.md` + `release.json` | Désynchronisés du code réel (phases 3-5 non versionnées). | Passer à `1.0.0`, ajouter entrées CHANGELOG 0.4/0.5/1.0, régénérer `release.json` via `build-portable.sh` + `sign-release.py`. |
+| `ui/assets/i18n/{fr,en}.json` | Absents du dépôt — bloquant pour l'UI. | Créer et commiter (ou lever `.gitignore` si l'entrée les exclut par erreur). |
+| `app/security/manifest_verifier.py` | Signature Ed25519 « non implémentée ». | Câbler `scripts/sign-release.py verify` sur `release.json.sig` au démarrage quand `require_signature=true`. |
+| `app/requirements.txt` | Ne liste pas `cryptography` requis par `sign-release.py`. | Ajouter `cryptography==43.0.1` (ou équivalent). |
+| `models/qwen2.5-0.5b-instruct-q4_k_m.gguf` (350 MB) | Vole ~350 MB du repo, alors que `.gitignore` prévoit `models/*.gguf`. | Retirer du tracking git (`git rm --cached`), documenter téléchargement dans `README.md` §Quick Start. |
+| `keybuilder/**/{bin,obj}/Release/**` | Artefacts .NET compilés commités par erreur. | `git rm --cached` + ajouter au `.gitignore` (`**/bin/`, `**/obj/`). |
+| `frontend/` (redirect Emergent) | Utile en dev Emergent seulement ; sans lien avec le portable. | À conserver marginalement mais isoler (ou déplacer dans `.emergent/`). |
+| `backend/server.py` (shim Emergent) | Utile en dev seulement. | À conserver, documenter comme « non-production ». |
+| `start.sh` / `core-startup.sh` `${fstype,,}` | Bash 3.2 macOS système ne supporte pas. | Remplacer par `$(printf '%s' "$fstype" | tr '[:upper:]' '[:lower:]')`. |
+
+### 4.3 À COMPLÉTER (spec présente mais code absent)
+
+| Élément | Où c'est spécifié | Priorité |
+|---|---|---|
+| Vérification Ed25519 au boot | `ARCHITECTURE.md §7.2` + `manifest_verifier.py` | P0 |
+| Fichiers i18n `ui/assets/i18n/*.json` | `app.js` ligne 75 | P0 |
+| Tokenizer JS local UI | `ARCHITECTURE.md §6.4` | P2 |
+| `scripts/fetch-binaries.ps1` alignement `--target/--out` | Utilisé par `build-portable.sh` ligne 69 | P1 |
+| `README.md` refonte tri-lingue (FR + EN) | `docs/ARCHITECTURE.md` (français neutre) | P1 |
+| CHANGELOG entrées 0.4/0.5/1.0 | Manquant | P1 |
 
 ---
 
-## 6. Limitations et incompatibilités détectées
+## 5. Risques techniques identifiés
 
-### 6.1 Multi-plateforme
+### 5.1 Binaires et compilation
 
-- **Windows ARM64** n'est pas couvert (l'installateur ne propose que `win-cpu-x64.zip`). Un Windows sur Snapdragon X ne fonctionnera pas nativement.
-- **Linux musl** (Alpine) : les binaires téléchargés sont compilés contre `glibc 2.17+` (mentionné dans le README). Alpine nécessitera une variante — non gérée aujourd'hui.
-- **FreeBSD/OpenBSD** : non pris en charge.
+| Risque | Impact | Mitigation |
+|---|---|---|
+| Releases `ggml-org/llama.cpp` avec glibc trop récente | Non-démarrage sur distros LTS | `docs/COMPILATION.md` documenté, build local en 3 min. |
+| Nouveaux tags upstream cassent le pattern d'asset | `install.sh` échoue silencieusement | Pattern regex strict + fallback message d'erreur clair (déjà en place). |
+| Runtime Python `python-build-standalone` renommage/hébergement | `build-portable.sh` échoue | URLs pinees au tag `20240814`. Miroir interne à envisager. |
+| Wheels `pydantic-core` binaire par arch | Manque un wheel pour arch exotique (linux-aarch64 musl) | Contrainte assumée : cible glibc uniquement en portable. Alpine/musl non supporté. |
+| **Clé USB FAT32/exFAT** (noexec, symlinks non résolus) | `llama-server` refuse de s'exécuter | `_is_restricted_fs()` + staging `/tmp/portableai.*` + résolution symlinks (déjà en place `start.sh` + `core-startup.sh` + `install.sh`). |
 
-### 6.2 Contrainte « offline »
+### 5.2 GPU backends
 
-- L'**installation** requiert obligatoirement une connexion Internet (API GitHub + téléchargement des archives, ~50-100 Mo par plateforme). Ce n'est pas bloquant pour une distribution USB si l'installateur est exécuté **une fois** par le mainteneur avant expédition, mais il faut prévoir un **mode « install depuis cache local »** (archives déjà présentes dans un `cache/`).
-- Rate-limit API GitHub : 60 req/h par IP non authentifiée. Documenté dans le README.
-- Aucune **vérification d'intégrité** (checksum SHA256, signature GPG) des binaires téléchargés depuis GitHub. Risque supply-chain à mitiger.
+| Risque | Impact | Mitigation |
+|---|---|---|
+| CUDA runtime différent (11 vs 12) | Binaire crash à load | Fallback CPU auto si CUDA fail (à documenter). |
+| ROCm limité à quelques distributions | Utilisateurs déçus | Binaires ROCm non fetchés par défaut, opt-in. |
+| Metal (macOS) : signature Gatekeeper | Refus de lancement | Documenter dans README (`spctl --add`, Préférences Sécurité). |
+| Vulkan sur GPU intégré Intel obsolète | Instable | Fallback CPU documenté ; force CPU via `settings.json`. |
 
-### 6.3 Contrainte « zero-trace »
+### 5.3 Portabilité
 
-Sérieusement problématique aujourd'hui :
+| Risque | Impact | Mitigation |
+|---|---|---|
+| PowerShell 5.1 (Windows 10) vs 7+ (Windows 11) | Syntaxe scripts | `core-startup.ps1` doit rester compatible 5.1 (à auditer). |
+| macOS `bash 3.2` (system) vs `bash 5.x` (Homebrew) | `${var,,}` non supporté en 3.2 | À corriger (§4.2). |
+| Débranchement clé pendant écriture | Corruption `data/`, `logs/` | Fsync + écriture atomique via `.tmp` + `rename` (implémenté dans `ConversationStore` et `save_settings`). |
 
-- `start.sh` **écrit dans `/tmp`** quand le FS est restreint (FAT32/exFAT/noexec). Le `trap` supprime le dossier à la sortie normale, mais un `kill -9` laisse des traces.
-- `llama-server` peut écrire des logs sur stdout mais aussi (selon config) un fichier de cache — à vérifier et neutraliser.
-- L'ouverture automatique du navigateur (`xdg-open`, `open`, `start`) laisse une entrée d'historique.
-- Aucune purge de la RAM après extinction n'est faite (pas trivial en user-space, mais documentable).
-- Le PATH est modifié par `start.bat` (prépendé avec `bin\windows`) — annulé automatiquement à la fin du process, donc pas de trace persistante.
+### 5.4 Sécurité
 
-Un vrai mode « zero-trace » impliquera : monter un tmpfs chiffré, désactiver l'ouverture navigateur, forcer stdout logs, purger `%TEMP%`/`/tmp` à l'extinction, éviter tout accès disque persistent en dehors de la clé USB.
+| Risque | Impact | Mitigation |
+|---|---|---|
+| Signature Ed25519 non vérifiée au boot | Binaire trojanisé accepté | **À implémenter** (§4.3). |
+| API key en clair sur clé USB volée | Rejeu | Chiffrement volume out-of-scope, documenter recommandation VeraCrypt/BitLocker/LUKS. |
+| Prompt injection via user prompt | Fuite system prompt si `locked=true` | Comportement OpenAI standard (llama-server ne recopie pas le system role). Test heuristique Jaccard < 0.3 (spec `ARCHITECTURE §10.5`) non implémenté. |
+| CORS wildcard en mode LAN | Ouverture cross-origin non désirée | UI doit exiger un warning + confirmation explicite avant d'accepter `"*"`. Non implémenté. |
 
-### 6.4 Portabilité binaires
+### 5.5 Fiabilité modèles
 
-- Les libs partagées sont copiées **en dur** (les symlinks sont résolus par `_resolve_symlinks` dans `install.sh` et par le bloc PowerShell dans `install.bat`) — bien pensé pour FAT/exFAT qui ne supportent pas les symlinks POSIX.
-- La détection d'exécution restreinte dans `start.sh` (`_is_restricted_fs`) est robuste (4 couches), mais **absente de `start.bat`** — sur Windows, l'exécution depuis une clé USB NTFS/exFAT fonctionne car Windows ne bloque pas l'exécution ; toutefois des politiques d'entreprise (AppLocker, SRP) pourraient poser problème et ne sont pas gérées.
+| Risque | Impact | Mitigation |
+|---|---|---|
+| **Qwen 0.5B** — tool routing autonome peu fiable | UX agentique dégradée | Documenté 5 fois. Recommander 3B (démo) / 7B+ (prod) dans README §Quick Start. |
+| Contexte 8192 sur 4 GB RAM | OOM au chargement | `llama-server` échoue proprement, message clair. |
+| Absence de télémétrie pour observer les erreurs terrain | Bugs silencieux | Assumé (zero-trace). Log local rotatif + rapport HTML Key Builder. |
 
-### 6.5 GPU backends
+### 5.6 Architecture logicielle
 
-- L'installateur exclut délibérément **toutes** les variantes GPU (CUDA/Vulkan/ROCm/SYCL/etc.). Volontaire pour la portabilité, mais empêche l'accélération sur des machines qui en disposent. À réintroduire de manière **optionnelle** dans la nouvelle version (ex. option `--with-gpu vulkan` ou détection auto).
+| Risque | Impact | Mitigation |
+|---|---|---|
+| Duplication `install.sh` (racine) vs `scripts/fetch-binaries.sh` | Deux voies parallèles, confusion | Consolider (§4.2). |
+| Duplication `start.sh` (llama-only) vs `start-linux.sh` (Studio complet) | Utilisateur lance la mauvaise cible | Consolider ou renommer explicitement. |
+| Deux systèmes de nommage `bin/` | Scripts pointent vers l'un ou l'autre | Unifier vers `bin/<os>-<arch>/<backend>/` (§4.2). |
+| Aucune CI/CD | Régressions non détectées automatiquement | Ajouter GitHub Actions : lint Python (ruff), tests bash, `dotnet test` Core. |
 
-### 6.6 Sécurité
+### 5.7 Divers
 
-- Port `--host 0.0.0.0` par défaut : le serveur est exposé sur tout le LAN sans authentification. Volontaire (« LAN sharing ») mais dangereux dans un contexte pro/entreprise. Pas de HTTPS, pas de token API.
-- Token GitHub visible dans la config git locale (vu §4). Ne concerne pas les fichiers versionnés, mais est un risque opérationnel si `git config --get remote.origin.url` est loggé quelque part.
-
----
-
-## 7. Risques techniques identifiés
-
-| Risque | Sévérité | Impact | Mitigation suggérée |
-|---|---|---|---|
-| **API GitHub rate-limitée** (60/h) pendant l'installation | Moyen | L'installateur échoue silencieusement (documenté dans le README). | Ajouter un mode « cache local » avec archives pré-téléchargées, ou authentifier via un token embarqué à faible privilège pour build officiel. |
-| **Pas de vérification d'intégrité** des binaires téléchargés | Élevé | Attaque supply-chain (compromission du release GitHub, MitM). | Ajouter checksums SHA256 pinned pour chaque release supportée, vérifier après téléchargement. |
-| **UI supprimée** (`dedba4d`) | Moyen | Aucune interface actuellement, à reconstruire ex nihilo pour FR/EN. | Consulter le contenu du commit supprimé pour idées UX, ou repartir de zéro avec un design agent. |
-| **Exposition LAN par défaut** (`0.0.0.0:8080` sans auth) | Élevé | Toute machine du réseau peut envoyer des requêtes. | Bind sur `127.0.0.1` par défaut ; option `--lan` explicite ; ajouter un token API généré au premier lancement. |
-| **Zero-trace non implémenté** | Élevé (par rapport au cahier des charges) | `/tmp`, historique navigateur, cache modèles, logs. | Redesign complet : tmpfs chiffré, mode headless, purge sur SIGTERM. |
-| **Windows ARM64 non supporté** | Faible | Machines Snapdragon X exclues. | Ajouter cible dans les installateurs quand `llama.cpp` publie l'asset. |
-| **VCRUNTIME140_1.dll requis** (Windows) | Faible | L'utilisateur doit installer VC++ Redistributable manuellement, or on veut du portable. | Bundler la DLL dans `bin/windows/` (licence Microsoft à vérifier) ou statically-link. |
-| **Aucun Python portable actuellement** | Structurel | Impossible d'ajouter FastAPI/MCP sans casser la promesse « zero install ». | Intégrer `python-build-standalone` (Astral) — ~30 Mo par plateforme, exécutable en place. |
-| **Absence de licence** | Moyen | Ambiguïté légale sur la réutilisation. | Choisir (MIT/Apache-2.0/AGPL) et documenter dépendances (`llama.cpp` MIT, modèles GGUF variables). |
-| **Aucun test ni CI** | Moyen | Régressions faciles sur 3 OS × 2 archs. | Ajouter GitHub Actions matrix (linux-x64, linux-arm64, macos-13, macos-14, windows-latest) avec au minimum un smoke test de l'installateur. |
-| **`.gitignore` manquant** | Faible | Risque de commit accidentel de binaires (~100 Mo) ou de modèles (~4 Go). | Ajouter dès la phase 1. |
-| **Historique commits d'un seul auteur** | Faible | Bus-factor = 1, pas de revue de code. | Non bloquant pour la reprise, mais à noter. |
-
----
-
-## 8. Recommandation de base de départ pour l'architecture
-
-Compte tenu de l'analyse :
-
-1. **Conserver** `install.sh`, `install.bat`, `start.sh`, `start.bat` comme **couche de bootstrap binaire** — ils font bien leur travail. Les enrichir avec :
-   - téléchargement d'un **runtime Python portable** (`python-build-standalone`) par plateforme, placé dans `runtime/<plateforme>/python/`,
-   - installation offline des dépendances Python via un `wheels/` embarqué (résolu au préalable),
-   - vérification SHA256 des archives,
-   - support d'un mode « cache local » (`--offline`).
-2. **Ajouter au-dessus** une nouvelle couche applicative Python en `app/` (ou `src/`) :
-   - `app/api/` : serveur FastAPI OpenAI-compatible qui **délègue** l'inférence à `llama-server` en local via HTTP interne (loopback, port aléatoire), et ajoute auth, journalisation zero-trace, streaming SSE.
-   - `app/mcp/` : serveur MCP exposant les skills métiers.
-   - `app/agent/` : boucle agentique orchestrant API + MCP + outils.
-   - `app/ui/` : UI statique (HTML/CSS/JS vanilla ou build React pré-compilé) FR/EN, servie soit par FastAPI soit par `llama-server` via `--path`.
-3. **Refondre `start.sh`/`start.bat`** pour orchestrer 3 processus : `llama-server` (loopback), FastAPI (public), MCP (loopback), avec un gestionnaire de cycle de vie propre (trap/signaux).
-4. **Introduire dès le début** : `.gitignore`, `LICENSE`, `pyproject.toml`, `docs/`, dossier `tests/`, GitHub Actions matrix.
-5. **Mode « zero-trace »** : concevoir dès la phase 1 (tmpfs chiffré optionnel, purge au SIGTERM, logs mémoire uniquement, headless par défaut).
-
-En résumé : **le dépôt actuel est un excellent point de départ pour la couche bootstrap, mais la totalité de la stack applicative reste à construire**. Aucune régression n'est nécessaire ; tout est en mode « addition ».
+| Risque | Impact | Mitigation |
+|---|---|---|
+| Dossier `.emergent/` local | Fuite chemin conteneur | Déjà dans `.gitignore` — vérifier avant push public. |
+| `keybuilder/**/bin/Release/**` modifiés à chaque build | Repo pollué | Ajouter `**/bin/` et `**/obj/` au `.gitignore` root ou dans `keybuilder/.gitignore`. |
 
 ---
 
-## 9. Résumé structuré (10-15 lignes)
+## 6. État git
 
-- **État du dépôt** : minimal (~124 Ko, 5 fichiers de code + README), propre, sur `main` à jour, historique linéaire d'un seul auteur (14 commits, avril–mai 2026), working tree clean.
-- **Nature actuelle** : uniquement un wrapper Bash/Batch autour de `llama-server` (upstream `ggml-org/llama.cpp`). Aucun Python, aucun Node, aucun MCP, aucune UI (la précédente `ui/index.html` a été supprimée au commit `dedba4d`).
-- **Couvert aujourd'hui** : téléchargement multi-plateforme (Linux x64/arm64, macOS x64/arm64, Windows x64) des binaires CPU depuis l'API GitHub Releases, résolution des symlinks pour FAT/exFAT, détection filesystème restreint avec staging `/tmp`, sélection de modèle GGUF interactive, exposition sur `0.0.0.0:8080`.
-- **Réutilisable tel quel** : `install.sh`/`install.bat` (à ~90 %), `start.sh` (à ~80 %, à enrichir pour orchestrer aussi FastAPI/MCP/agent), arborescence `bin/`/`models/`, README comme base doc.
-- **À construire intégralement** : serveur API OpenAI-compatible custom (FastAPI), serveur MCP, boucle agentique, UI FR/EN, runtime Python portable, système de config, i18n, tests, `.gitignore`, licence.
-- **Risques majeurs** : pas de checksum des binaires téléchargés (supply-chain), zero-trace absent (traces dans `/tmp`, historique navigateur), exposition LAN sans auth par défaut, Windows ARM64 non supporté, absence de licence, bus-factor = 1.
-- **Recommandation architecture** : garder la couche bootstrap actuelle, ajouter **au-dessus** une couche applicative Python (`app/api`, `app/mcp`, `app/agent`, `app/ui`) qui communique avec `llama-server` en loopback, et refondre `start.sh`/`start.bat` en orchestrateur 3-processus avec cycle de vie propre. Base de départ **saine** mais **très partielle** : ~10 % du produit cible existe.
+### 6.1 Branche et remote
+
+- Branche courante : **`main`**.
+- Remote : `origin/main` avec **9 commits d'avance** localement (non poussés).
+
+### 6.2 Derniers commits (HEAD)
+
+```
+3b71cae feat(phase5): AfricAIsoft Key Builder — application WPF C#/.NET Windows
+3b07012 fix(phase4): anti-FOUT i18n — UI masquée jusqu'à hydratation complète
+2e5feec fix(phase4): cache HTTP navigateur + test Playwright comportemental i18n
+84737d6 fix(phase3+4): GET /system-prompt honore active_preset + hardening persistance i18n
+6f97c24 feat(phase3+4): correctifs OpenAPI/context_size/tools + UI Web complète
+44b74cd feat(phase3): MCP stdio + 4 skill packs + agent loop + SSE trace + i18n/reason_code fixes
+ef426a5 test(phase2): make T3 and T4 deterministic (codeword contrast + seed)
+5da320d fix(phase2): inline role='system' override, full UI i18n, root '/' redirect
+f8aac50 feat(phase2): FastAPI orchestrator, OpenAI-compat proxy, system prompt mgmt, launchers
+d8acd19 fix: path bug fixed
+5300d57 fix: file system links
+13c9dae updated README
+0693232 feat:model selection
+7f3509a fix: line issue fixed
+b43bb71 feat: select platform to install
+77d9863 feat: updated functunality
+8903c93 fix: downloads to all platforms
+dae487f add: installation script and fixed starter
+```
+
+Les commits `77d9863` → `dae487f` proviennent du dépôt PortableAI d'origine ;
+à partir de `f8aac50` (Phase 2), tous les commits sont de la transformation
+AfricAIsoft.
+
+### 6.3 Propreté de l'index
+
+**Fichiers modifiés (uncommitted)** — tous des artefacts de build .NET :
+
+```
+keybuilder/src/AfricAIsoft.KeyBuilder.Core/bin/Release/net8.0/*.dll,pdb
+keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Release/net8.0/**
+keybuilder/tests/AfricAIsoft.KeyBuilder.Core.Tests/bin/Release/net8.0/*.dll,pdb
+keybuilder/tests/AfricAIsoft.KeyBuilder.Core.Tests/obj/Release/net8.0/**
+```
+
+**Fichiers non-suivis (untracked)** :
+
+```
+keybuilder/src/AfricAIsoft.KeyBuilder.Core/bin/Debug/
+keybuilder/src/AfricAIsoft.KeyBuilder.Core/obj/Debug/
+keybuilder/tests/AfricAIsoft.KeyBuilder.Core.Tests/bin/Debug/
+keybuilder/tests/AfricAIsoft.KeyBuilder.Core.Tests/obj/Debug/
+scripts/build-portable.ps1
+scripts/build-portable.sh
+scripts/sign-release.py
+tests/RESULTS.md
+tests/manual-checklist.md
+```
+
+**Diagnostic** :
+- `.gitignore` root **NE contient PAS** `**/bin/` ni `**/obj/` — d'où la
+  pollution du diff .NET. Ajouter au `.gitignore` (root ou `keybuilder/`).
+- `scripts/build-portable.{sh,ps1}` et `scripts/sign-release.py` : nouveaux
+  scripts Phase 6 non commités, prêts à être ajoutés.
+- `tests/RESULTS.md`, `tests/manual-checklist.md` : rapports Phase 6 non commités.
+
+### 6.4 Historique
+
+- Historique **linéaire** (pas de merge commit).
+- Messages Conventional Commits (`feat`, `fix`, `test`) respectés à partir de
+  Phase 2 ; commits d'origine PortableAI moins formels.
+- Aucune signature GPG des commits observée (à envisager pour la release finale).
+- Aucun tag git présent — ajouter `v1.0.0` à la release finale.
+
+---
+
+## 7. Recommandation de base de départ pour l'architecture
+
+**Le dépôt EST la base de départ.** Il n'y a pas lieu de repartir de zéro.
+Les fondations sont solides, cohérentes avec le cahier des charges et
+largement testées (123 tests verts). Le plan proposé pour la suite est :
+
+1. **Nettoyer** (P0) : gitignore `**/bin/**/obj/`, retirer le `.gguf`
+   traqué, supprimer/déprécier `install.sh`+`start.sh` racine, unifier
+   nommage `bin/<os>-<arch>/<backend>/`, ajouter `ui/assets/i18n/*.json`,
+   ajouter `cryptography` à `requirements.txt`.
+2. **Fermer** (P0) : implémenter la vérification Ed25519 au boot dans
+   `manifest_verifier.py` (le signer côté build existe déjà).
+3. **Aligner** (P1) : `VERSION` → `1.0.0`, CHANGELOG 0.4/0.5/1.0, régénérer
+   `release.json` avec `build-portable.sh` + signer, réécrire `README.md`
+   autour d'un produit unique (AfricAIsoft Portable Studio) FR + EN.
+4. **Livrer** (P1) : `build-portable.sh --target all` pour produire 5
+   distributions, checklist manuelle exécutée sur du matériel réel, tag
+   `v1.0.0`, push `origin/main` + tag.
+5. **Extensions futures** (P2) : compteur tokens JS local, tests Jaccard
+   anti-fuite prompt, chiffrement volume documenté, CI/CD GitHub Actions,
+   support Windows ARM64, ext4 sous Windows.
+
+Architecture cible = celle décrite dans `docs/ARCHITECTURE.md` (déjà
+normative). Aucune divergence conceptuelle n'a été observée entre la
+spécification et le code. La dette technique se limite à des chantiers de
+finition (naming, doc, signature runtime, i18n JSON).
+
+---
+
+**Fin du rapport d'analyse Phase 0.** Aucun fichier existant du dépôt n'a
+été modifié pendant cette phase ; seul `docs/ANALYSIS.md` a été (ré)écrit.

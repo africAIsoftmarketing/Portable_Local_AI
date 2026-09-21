@@ -1,300 +1,403 @@
-# PortableAI — Plug-and-play Local LLM Server
+# AfricAIsoft Portable Studio
 
-> Run any GGUF language model locally — no Python, no Docker, no cloud, no install headaches.  
-> Works from a USB drive. Runs on Linux, macOS, and Windows. One script to set up everything.
+> **Distribution portable USB 100 % offline** pour faire tourner un modèle
+> local (GGUF via `llama.cpp`) avec API OpenAI-compatible, boucle agentique
+> multi-outils MCP, UI web FR/EN, et fabrication industrielle de clés via
+> le **Key Builder** Windows.
+
+**Version : 1.0.0** — Licence : MIT — © 2026 AfricAIsoft
 
 ---
 
-## AfricAIsoft Key Builder (Windows)
+## Table des matières
 
-Application C#/.NET WPF native (Windows 10/11 x64) permettant de **fabriquer**
-des clés USB portables prêtes à l'emploi contenant le studio, un modèle GGUF,
-les skills MCP choisis et les binaires par plateforme. Voir
-`keybuilder/docs/USER-GUIDE.md` (utilisateur) et `keybuilder/docs/TECHNICAL.md`
-(architecture).
+1. [Présentation](#1-présentation)
+2. [Prérequis par plateforme](#2-prérequis-par-plateforme)
+3. [Installation pas-à-pas](#3-installation-pas-à-pas)
+4. [Démarrage & première utilisation](#4-démarrage--première-utilisation)
+5. [Configuration](#5-configuration)
+6. [Spécificités Linux](#6-spécificités-linux)
+7. [Ajouter un modèle GGUF](#7-ajouter-un-modèle-gguf)
+8. [Ajouter un skill MCP](#8-ajouter-un-skill-mcp)
+9. [Key Builder (fabrication USB Windows)](#9-key-builder-fabrication-usb-windows)
+10. [FAQ — dépannage](#10-faq--dépannage)
+11. [Limites connues (honnêteté)](#11-limites-connues-honnêteté)
+12. [Licence et crédits](#12-licence-et-crédits)
 
-Compilation & tests :
+---
+
+## 1. Présentation
+
+AfricAIsoft Portable Studio est une distribution USB clé-en-main qui embarque :
+
+- Un **serveur d'inférence local** (`llama-server` de `llama.cpp`) supportant
+  CPU / CUDA / ROCm / Vulkan / Metal.
+- Un **orchestrateur FastAPI** (Python 3.12 portable) exposant une API
+  OpenAI-compatible `/v1/*` + endpoints studio `/api/*`.
+- 4 **skills MCP** stdio prêts à l'emploi (8 outils métier) :
+  cybersécurité, comptabilité, RAG local BM25, utilitaires généraux.
+- Une **UI web FR/EN** en HTML/CSS/JS vanilla (aucun `node`, aucun `npm`).
+- Un **Key Builder** C#/.NET 8 WPF pour Windows qui fabrique des clés USB
+  personnalisées (modèle, skills, plateformes, marque cliente).
+
+Tout fonctionne **entièrement hors ligne** après installation, sans télémétrie
+et sans persistance en dehors des fichiers explicites de la clé USB.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Navigateur (http://127.0.0.1:8080)           │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────────┐
+│  Orchestrateur FastAPI (Python 3.12 portable)                   │
+│    /v1/chat/completions  ── boucle agentique ── /api/events SSE │
+│    /api/system-prompt    /api/config    /api/skills             │
+│    /api/conversations    /api/models/{available,switch}         │
+└──┬────────────────────┬────────────────────┬────────────────────┘
+   │ HTTP loopback      │ stdio JSON-RPC 2.0 │ FS
+   ▼                    ▼                    ▼
+llama-server         MCP servers          ui/  models/
+127.0.0.1:8090       (cybersec,           config/  data/
+                      accounting,
+                      rag, general)
+```
+
+---
+
+## 2. Prérequis par plateforme
+
+| Plateforme          | Requis                                                                 |
+|---------------------|-----------------------------------------------------------------------|
+| **Linux x86_64**    | glibc ≥ 2.17 (toute distro moderne : Ubuntu 22.04+, Fedora 39+, Debian 12+). Outils : `curl`, `tar`. |
+| **Linux ARM64**     | Idem, glibc ≥ 2.17. Raspberry Pi 5 / cloud ARM validés.               |
+| **macOS Apple Silicon (M1/M2/M3)** | macOS 11 Big Sur ou plus récent. `bash`, `curl` fournis. |
+| **macOS Intel**     | Idem.                                                                  |
+| **Windows 10 (build 17063+) / 11 x64** | [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) requis. Optionnel : PowerShell 7+. |
+
+**RAM recommandée** :
+
+| RAM disponible | Tailles de modèle GGUF Q4_K_M recommandées |
+|---|---|
+| 4 Go  | modèles 1B – 3B                             |
+| 8 Go  | modèles jusqu'à 7B                          |
+| 16 Go | modèles jusqu'à 13B                         |
+| 32 Go | modèles 30B et plus                         |
+
+**Espace disque** : ~1,2 Go pour le studio 5 plateformes CPU-only,
++ 2-8 Go par modèle GGUF selon taille.
+
+---
+
+## 3. Installation pas-à-pas
+
+### 3.1 Récupération des binaires `llama-server` (une seule fois, en ligne)
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Utilisez `scripts/fetch-binaries.sh` ou `.ps1` pour peupler   │
+│  `bin/<os>-<arch>/<backend>/` depuis les releases officielles  │
+│  github.com/ggml-org/llama.cpp                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Linux / macOS** :
+```bash
+bash scripts/fetch-binaries.sh -t b11071 -p linux-x86_64 -b cpu
+bash scripts/fetch-binaries.sh -t b11071 -p darwin-arm64  -b cpu
+bash scripts/fetch-binaries.sh -t b11071 -p windows-x86_64 -b cpu
+# ... ou toutes les plateformes en boucle
+```
+
+**Windows** :
+```powershell
+pwsh -File scripts\fetch-binaries.ps1 -Tag b11071 -Platform windows-x86_64 -Backend cpu
+```
+
+Si votre distribution a une glibc plus ancienne que celle du binaire
+upstream (ex. Debian 12 → glibc 2.36 vs release b11071 qui exige 2.38),
+compilez localement en 3 minutes : voir `docs/COMPILATION.md`.
+
+### 3.2 Runtime Python portable (recommandé pour clé USB)
+
+Pour une clé USB **vraiment autonome** (sans dépendre du Python système
+de la machine hôte), lancez :
+
+```bash
+bash scripts/build-portable.sh --target linux-x64      # ou linux-arm64, macos-arm64, macos-x64, windows-x64, all
+```
+
+Cela télécharge `python-build-standalone 3.12.5` dans `bin/<plat>/python/`,
+installe toutes les wheels dans `vendor/wheels/`, et copie le code du studio.
+
+Sans ce runtime portable, le studio utilisera le Python système de la
+machine (fallback documenté dans `scripts/core-startup.sh`).
+
+### 3.3 Placer un modèle GGUF
+
+Téléchargez un `.gguf` depuis [huggingface.co](https://huggingface.co) et
+placez-le dans `models/` :
+
+```
+models/
+├── qwen2.5-3b-instruct-q4_k_m.gguf      ← recommandé démo
+└── (ou tout autre .gguf de votre choix)
+```
+
+Q4_K_M offre le meilleur compromis taille/qualité pour la plupart des cas.
+
+---
+
+## 4. Démarrage & première utilisation
+
+### Linux
+```bash
+chmod +x start-linux.sh
+./start-linux.sh
+```
+
+### macOS
+```bash
+./start-mac.command       # ou double-clic depuis le Finder
+```
+
+### Windows
+```
+Double-cliquez sur start-windows.bat
+```
+
+Séquence attendue (~10-40 s selon la taille du modèle) :
+
+```
+╔════════════════════════════════════════════════════════╗
+║   AfricAIsoft Portable Studio - démarrage              ║
+╚════════════════════════════════════════════════════════╝
+[INFO ] Plateforme : linux-x86_64
+[INFO ] Backend détecté : cpu (no_gpu_detected)
+[INFO ] Python portable : bin/linux-x86_64/python/bin/python3
+[INFO ] API : http://127.0.0.1:8080
+[INFO ] Démarrage orchestrateur...
+=== Prêt ===
+```
+
+Le navigateur s'ouvre automatiquement sur `http://127.0.0.1:8080`. L'UI
+propose : chat, sélecteur de modèle, panneau des skills, éditeur du system
+prompt, panneau de configuration.
+
+**Arrêt propre** : `Ctrl+C` dans le terminal (Linux/macOS) ou fermeture de
+la fenêtre (Windows). Le script `stop-*` correspondant nettoie les PIDs et
+le staging `/tmp/portableai.*`.
+
+---
+
+## 5. Configuration
+
+Tout est concentré dans **`config/settings.json`** — validé par Pydantic +
+JSON Schema (`config/settings.schema.json`, `additionalProperties:false`).
+
+Extraits notables (avec défauts) :
+
+```json
+{
+  "server": {
+    "bind_host": "127.0.0.1",  // "0.0.0.0" = partage LAN (opt-in)
+    "port": 8080,
+    "llama_host": "127.0.0.1", // llama-server TOUJOURS loopback
+    "llama_port": 8090
+  },
+  "model": {
+    "path": null,              // null = 1er .gguf trouvé
+    "context_size": 8192
+  },
+  "agentic": {
+    "max_tool_rounds": 5,
+    "total_timeout": 120,
+    "allow_parallel_tools": true
+  },
+  "security": {
+    "require_api_key": false,       // active l'auth Bearer
+    "require_signature": false      // exige release.json.sig + public.pem
+  },
+  "ui": {
+    "default_language": "fr",       // "fr" | "en"
+    "theme": "auto"                 // "auto" | "light" | "dark"
+  }
+}
+```
+
+L'UI dispose d'un onglet **Config** qui édite ce fichier avec validation
+en temps réel. Certaines clés (`server.port`, `model.context_size`, etc.)
+nécessitent un redémarrage manuel.
+
+---
+
+## 6. Spécificités Linux
+
+### 6.1 Systèmes de fichiers restreints (FAT32 / exFAT / noexec)
+
+Si la clé USB est formatée en FAT32 ou exFAT, ou montée `noexec`, les
+binaires `llama-server` refusent de s'exécuter. Le studio détecte
+automatiquement ces cas et **stage les binaires dans `/tmp/portableai.XXXX/`**
+avant lancement, avec résolution des symlinks `.so.N`. Aucune action
+requise. Voir la logique `_is_restricted_fs()` dans `scripts/core-startup.sh`.
+
+### 6.2 Dépendances système
+
+Le studio exige `curl` (téléchargement binaires) et `python3` (fallback si
+runtime portable absent). Le `glibc` du binaire téléchargé doit correspondre
+à celui de la distro cible ; sinon, recompilez avec `docs/COMPILATION.md`.
+
+### 6.3 GPU (CUDA, ROCm, Vulkan)
+
+Le détecteur (`scripts/detect-backend.sh`) sonde en < 5 s :
+1. `nvidia-smi` → backend CUDA si binaire `bin/<plat>/cuda/` présent.
+2. `rocm-smi` → ROCm.
+3. `vulkaninfo` → Vulkan.
+4. Sinon → CPU.
+
+Récupérez les binaires GPU (opt-in) via `scripts/fetch-binaries.sh -b cuda`
+puis relancez le studio.
+
+---
+
+## 7. Ajouter un modèle GGUF
+
+1. Téléchargez un `.gguf` (ex. `mistral-7b-instruct-v0.2.Q4_K_M.gguf`)
+   depuis HuggingFace et déposez-le dans `models/`.
+2. Rechargez l'onglet **Modèles** de l'UI, puis cliquez sur le nouveau modèle.
+3. Confirmez la bascule : le studio décharge le modèle courant et charge
+   le nouveau (~5-30 s selon taille).
+
+Alternative CLI : éditez `config/settings.json → model.path`, puis
+redémarrez le studio.
+
+**Recommandations tool-calling** :
+
+| Taille    | Fiabilité choix d'outils autonome | Usage recommandé          |
+|-----------|-----------------------------------|---------------------------|
+| **0.5B**  | ⚠ ~20 %                          | Test infrastructure       |
+| **3B**    | ✅ ~70 %                          | Démo / poste léger        |
+| **7B+**   | ✅✅ ~90 %+                        | Production                |
+
+---
+
+## 8. Ajouter un skill MCP
+
+Recette < 5 min (détail complet dans `docs/ADD-SKILL.md`) :
+
+```bash
+cp -r mcp-servers/_template mcp-servers/mon-skill
+# Éditer server.py : décorateur @server.tool(...) sur vos fonctions
+# Redémarrer le studio → /api/skills liste automatiquement mon-skill
+```
+
+**Règles impératives** :
+- Pure Python, zéro dépendance native.
+- `stdout` = JSON-RPC uniquement (utilisez `stderr` pour les logs).
+- Timeout 30 s par appel, respawn auto (3 tentatives).
+
+---
+
+## 9. Key Builder (fabrication USB Windows)
+
+`keybuilder/` contient une application C#/.NET 8 WPF Windows pour fabriquer
+des clés USB personnalisées en batch (mode production).
+
+**Fonctionnalités** :
+- Détection USB temps réel via WMI.
+- Sélection modèle GGUF / skills / plateformes cibles / system prompt custom.
+- Vérification GGUF (magic + version 1..3) avant copie.
+- Copie SHA-256 streaming (mémoire O(1) même pour modèles 20 Go).
+- Formatage exFAT via `diskpart` avec élévation UAC.
+- Reprise après interruption (journal `.keybuilder-journal.json`).
+- Rapport HTML autonome par clé produite + marker `.africaisoft-key.json`.
+- Mode batch séquentiel (JSON de configuration).
+
+**Compilation & tests** :
 ```powershell
 cd keybuilder
-dotnet test tests/AfricAIsoft.KeyBuilder.Core.Tests   # portable — passe sous Linux/Windows
+dotnet test tests/AfricAIsoft.KeyBuilder.Core.Tests   # portable, passe sous Linux/Windows
 dotnet build src/AfricAIsoft.KeyBuilder.Wpf           # Windows uniquement (WPF)
-pwsh -File installer/build-portable.ps1               # génère le ZIP portable
-dotnet build installer/KeyBuilder.wixproj             # génère le .msi (WiX v5)
+pwsh -File installer/build-portable.ps1               # ZIP portable
+dotnet build installer/KeyBuilder.wixproj             # MSI (WiX v5)
 ```
 
-
-
-PortableAI wraps [llama.cpp](https://github.com/ggml-org/llama.cpp)'s `llama-server` into a zero-dependency portable package. You plug in a USB drive (or clone the repo), drop in a model, and run a single script. A local web UI opens in your browser and you can start chatting — fully offline, fully private.
-
-No Python environment. No package managers. No GPU required.
-
-> ⚠️ **Note sur la taille des modèles / Note on model size** — La boucle agentique
-> (tool-calling MCP) exige un modèle capable de choisir seul les bons outils.
-> Le modèle de démonstration **Qwen2.5-0.5B** embarqué n'est **PAS** suffisant
-> pour un routage tool-calling fiable ; il valide la mécanique mais choisit
-> mal ses outils. **Recommandations** :
-> - **Démo / poste léger** : Qwen2.5-3B-Instruct (Q4_K_M, ~2 Go). Décisions
->   correctes ~70 % du temps.
-> - **Production** : Qwen2.5-7B-Instruct, Llama-3.1-8B-Instruct, Mistral-Nemo-12B
->   (Q4_K_M / Q5_K_M). Décisions fiables ~90 %+ et rapports structurés soignés.
-> Un 0.5B reste utile pour tester l'infrastructure et pour du chat basique
-> sans outils.
+Documentation détaillée : `keybuilder/docs/USER-GUIDE.md` (utilisateur)
+et `keybuilder/docs/TECHNICAL.md` (architecture).
 
 ---
 
-## Features
+## 10. FAQ — dépannage
 
-- **Truly portable** — runs from a USB stick on any machine
-- **Cross-platform** — Linux (x64 + arm64), macOS (Intel + Apple Silicon), Windows (x64)
-- **Auto-installer** — fetches the correct `llama-server` binary for every platform in one run
-- **Model picker** — prompts you to choose when multiple `.gguf` models are present
-- **CPU-only** — works on any modern machine without a GPU
-- **100% offline** after setup — no data leaves your machine
-- **Built-in web UI** — chat interface served directly by `llama-server`
-- **LAN sharing** — accessible from any device on the same Wi-Fi at `http://0.0.0.0:8080`
+### Linux
 
----
-
-## Directory Layout
-
-```
-PortableAI/
-├── install.sh          ← Linux/macOS installer (all platforms)
-├── install.bat         ← Windows installer
-├── start.sh            ← Linux/macOS launcher
-├── start.bat           ← Windows launcher
-├── models/             ← Drop your .gguf model files here
-├── ui/                 ← (optional) custom web UI override
-└── bin/
-    ├── linux/
-    │   ├── linux_x64/
-    │   │   ├── llama-server-linux-x64   ← renamed server binary
-    │   │   ├── libllama.so              ← required shared libs
-    │   │   ├── libggml.so
-    │   │   └── libggml-cpu.so  ...
-    │   └── linux_arm64/
-    │       └── llama-server-linux-arm   + .so libs
-    ├── mac/
-    │   ├── mac_arm64/
-    │   │   └── llama-server-mac-arm     + .dylib libs
-    │   └── mac_x64/
-    │       └── llama-server-mac-x64     + .dylib libs
-    └── windows/
-        ├── llama-server-win.exe
-        └── *.dll                        ← required DLLs
-```
-
----
-
-## Quick Start
-
-### Step 1 — Get a model
-
-Download any `.gguf` model and place it in the `models/` folder.
-
-**Recommended for most machines (4–8 GB RAM):**
-
-> Search [huggingface.co](https://huggingface.co) for any model — filter by `GGUF` format and pick a `Q4_K_M` quantization for the best balance of size and quality.
-
-### Step 2 — Install binaries
-
-**Linux / macOS**
-```bash
-chmod +x install.sh
-./install.sh
-```
-
-The installer asks which platform(s) to set up:
-
-```
- Select which platform(s) to install:
-
-   [1] Linux x64 (most PCs/servers)
-   [2] Linux arm64 (Raspberry Pi, ARM servers)
-   [3] macOS arm64 (Apple Silicon M1/M2/M3)
-   [4] macOS x64 (Intel Mac)
-   [5] Windows x64 (CPU)
-
-   [A] All platforms (for a shared USB drive)
-   [Q] Quit
-
- Tip: enter multiple numbers separated by spaces (e.g. 1 3)
-```
-
-Choose **A** to pre-load all platforms if you're preparing a USB drive that will be used on multiple machines.
-
-**Windows**
-```
-Double-click install.bat
-```
-
-### Step 3 — Start the server
-
-**Linux / macOS**
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-**Windows**
-```
-Double-click start.bat
-```
-
-The browser opens automatically at **http://127.0.0.1:8080**
-
-If you have multiple models, you'll be asked to choose one:
-
-```
- [?] Multiple models found — select one:
-     ─────────────────────────────────────────────
-     [1] mistral-7b-instruct-v0.2.Q4_K_M.gguf     3.8G
-     [2] llama-3.2-3b-instruct-q4_k_m.gguf         1.9G
-
- Enter number [1-2]:
-```
-
----
-
-## Requirements
-
-### Runtime
-| Platform | Requirement |
-|---|---|
-| Linux | glibc 2.17+ (any modern distro) |
-| macOS | 11.0+ (Big Sur or later) |
-| Windows | Windows 10 (build 17063+), [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
-
-### For install.sh
-| Tool | Notes |
-|---|---|
-| `curl` | Pre-installed on most systems |
-| `tar` | Pre-installed on all Linux/macOS |
-| `unzip` | Only needed for Windows zip on Linux: `sudo pacman -S unzip` |
-
-### Hardware (minimum)
-| RAM | Recommended model size |
-|---|---|
-| 4 GB | 1B–3B models (Q4_K_M) |
-| 8 GB | 7B models (Q4_K_M) |
-| 16 GB | 13B models (Q4_K_M) |
-| 32 GB | 30B+ models (Q4_K_M) |
-
----
-
-## How It Works
-
-```
-install.sh / install.bat
-        │
-        ├── Queries GitHub API for latest llama.cpp release
-        ├── Downloads the correct archive per platform:
-        │       Linux x64   → llama-bXXXX-bin-ubuntu-x64.tar.gz
-        │       Linux arm64 → llama-bXXXX-bin-ubuntu-arm64.tar.gz
-        │       macOS arm64 → llama-bXXXX-bin-macos-arm64.tar.gz
-        │       macOS x64   → llama-bXXXX-bin-macos-x64.tar.gz
-        │       Windows x64 → llama-bXXXX-bin-win-cpu-x64.zip
-        ├── Extracts ALL files (binary + shared libs / DLLs)
-        └── Renames llama-server → platform-specific canonical name
-
-start.sh / start.bat
-        │
-        ├── Scans models/ for .gguf files
-        ├── Prompts for selection if > 1 model found
-        ├── Detects OS + architecture
-        ├── Sets LD_LIBRARY_PATH (Linux) / DYLD_LIBRARY_PATH (macOS)
-        │   so shared libs next to the binary are always found
-        └── Launches llama-server on port 8080
-```
-
-> **Why copy all the `.so` / `.dll` files?**  
-> `llama-server` dynamically links against `libllama`, `libggml`, `libggml-cpu` and others. Copying only the executable would cause an immediate crash with a "shared library not found" error. The installer copies the entire archive contents into the bin directory, and `start.sh` sets `LD_LIBRARY_PATH` to that directory so the binary is fully self-contained without touching any system paths.
-
----
-
-## Configuration
-
-The server starts with sensible defaults. To customize, edit the `exec "$BIN"` block at the bottom of `start.sh` / `start.bat`:
-
-```bash
-exec "$BIN" \
-    -m "$MODEL"      \   # model file path (set automatically)
-    -c 4096          \   # context window size (tokens)
-    -t "$THREADS"    \   # CPU threads (auto: nproc - 1)
-    --port 8080      \   # HTTP port
-    --host 0.0.0.0       # bind address (0.0.0.0 = LAN accessible)
-```
-
-Common tweaks:
-
-| Flag | Example | Effect |
+| Symptôme | Cause probable | Solution |
 |---|---|---|
-| `-c` | `-c 8192` | Larger context (needs more RAM) |
-| `-t` | `-t 4` | Fixed thread count |
-| `--port` | `--port 9090` | Change the port |
-| `--host` | `--host 127.0.0.1` | Localhost only (disable LAN) |
-| `-ngl` | `-ngl 35` | Offload layers to GPU (if available) |
+| `llama-server: version GLIBC_2.38 not found` | Distro plus ancienne que le binaire | Recompiler localement : `docs/COMPILATION.md` |
+| `error while loading shared libraries: libllama.so` | Libs manquantes à côté du binaire | Relancer `scripts/fetch-binaries.sh` (copie TOUT le contenu de l'archive) |
+| Le studio ne trouve pas de modèle | `models/` vide | Déposez un `.gguf` |
+| Port 8080 déjà occupé | Autre service | Modifiez `config/settings.json → server.port` |
 
-Full flag reference: `./bin/linux/linux_x64/llama-server-linux-x64 --help`
+### macOS
 
----
+| Symptôme | Solution |
+|---|---|
+| Gatekeeper refuse `llama-server` | Préférences Système → Sécurité → « Autoriser quand même », ou `spctl --add bin/darwin-arm64/cpu/llama-server` |
+| Metal absent | Le binaire `bin/darwin-arm64/metal/llama-server` doit exister ; sinon fallback CPU |
+| `bash: syntax error near unexpected token` | Vous utilisez l'ancien bash 3.2 système ; le studio est compatible (correctif Phase 6) |
 
-## Accessing from Other Devices
+### Windows
 
-While the server is running, any device on the same network can access the UI:
+| Symptôme | Solution |
+|---|---|
+| `VCRUNTIME140_1.dll` introuvable | Installez [VC++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
+| `curl not found` | Windows 10 ≥ 17063 l'inclut ; sinon [curl.se/windows](https://curl.se/windows/) |
+| PowerShell bloque le script | `Set-ExecutionPolicy -Scope Process Bypass` |
 
-1. Find your machine's local IP: `ip addr` (Linux) / `ipconfig` (Windows)
-2. Open `http://192.168.x.x:8080` on the other device
+### Général
 
----
-
-## Troubleshooting
-
-**`llama-server: error while loading shared libraries: libllama.so`**  
-The shared libs are missing from the bin directory. Re-run `install.sh` — it copies all files from the archive, not just the binary.
-
-**Binary not found / install.sh stops silently after printing the release tag**  
-GitHub API rate-limited the request (60 requests/hour for unauthenticated IPs). Wait a few minutes and try again.
-
-**`VCRUNTIME140_1.dll` not found (Windows)**  
-Install the [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) and re-run `start.bat`.
-
-**Model loads but responses are very slow**  
-Use a smaller or more quantized model (e.g., `Q2_K` instead of `Q8_0`). Reduce context with `-c 2048`.
-
-**Port 8080 already in use**  
-Change `--port 8080` to another port (e.g. `--port 9090`) in `start.sh` / `start.bat`.
+- **Réponses très lentes** : réduisez `model.context_size` (4096 au lieu de 8192)
+  ou passez à un modèle plus petit (Q4_K_M au lieu de Q8_0).
+- **Boucle agent qui n'appelle jamais d'outils** : votre modèle n'est pas fait
+  pour le function calling. Utilisez un modèle Instruct fine-tuné (Qwen 2.5-7B,
+  Llama 3.1-8B, Mistral-Nemo).
+- **UI qui affiche `chat.welcome` en dur** : les fichiers `ui/assets/i18n/*.json`
+  n'ont pas été livrés. Vérifiez que `git ls-files ui/assets/i18n/` liste 2 fichiers.
 
 ---
 
-## Updating llama.cpp
+## 11. Limites connues (honnêteté)
 
-Just re-run the installer. It always fetches the **latest** release from GitHub:
-
-```bash
-./install.sh   # picks what to update, overwrites existing binaries
-```
-
----
-
-## Project Structure
-
-```
-Portable_Local_AI/
-├── install.sh      Universal installer — Linux/macOS, all platforms
-├── install.bat     Windows installer
-├── start.sh        Launcher — Linux/macOS
-├── start.bat       Launcher — Windows
-├── models/         Your .gguf model files go here
-├── ui/             Optional: override the built-in web UI
-└── bin/            Auto-populated by installer
-```
+- **Qwen 2.5-0.5B** embarqué en démo : suffisant pour tester la stack, **trop
+  petit pour un routage d'outils autonome fiable**. En production, prévoir
+  un modèle 7B+.
+- **Windows ARM64 (Snapdragon X)** non couvert par défaut : aucun binaire
+  llama-server upstream.
+- **ext4 en écriture sous Windows** : non supporté nativement. Utilisez une
+  clé exFAT ou NTFS (le Key Builder refuse le formatage ext4 avec un message
+  clair).
+- **HTTPS local** : non fourni. Rester en `bind_host=127.0.0.1` pour toute
+  utilisation sensible. Le mode LAN (`0.0.0.0`) est en HTTP en clair —
+  documenté comme limitation.
+- **Vérification Ed25519** : implémentée (Phase 6) mais **désactivée par
+  défaut** (`security.require_signature=false`). Activez-la sur les
+  livraisons signées uniquement.
+- **Zero-trace forensique complet** : les logs sont métadonnées uniquement
+  (aucun contenu utilisateur), les conversations sont écrites dans
+  `data/conversations.json` (à chiffrer via VeraCrypt / BitLocker / LUKS
+  si sensible — hors périmètre du studio).
 
 ---
 
-## Credits
+## 12. Licence et crédits
 
-- **[llama.cpp](https://github.com/ggml-org/llama.cpp)** by ggml-org — the inference engine powering everything
-- Models from **[HuggingFace](https://huggingface.co)** — community-converted GGUF weights
+**Licence** : MIT © 2026 AfricAIsoft. Voir `LICENSE`.
 
----
+**Crédits** :
+- [`llama.cpp`](https://github.com/ggml-org/llama.cpp) — moteur d'inférence.
+- [`python-build-standalone`](https://github.com/astral-sh/python-build-standalone) — Python 3.12 portable.
+- Modèles GGUF issus de la communauté HuggingFace.
+- Protocole [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) — Anthropic.
+
+Contributions bienvenues via pull request. Toute nouvelle fonctionnalité
+doit rester **100 % offline**, **zéro dépendance native compilée à
+l'installation**, et **respecter le principe zero-trace**.
