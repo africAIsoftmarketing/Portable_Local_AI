@@ -378,9 +378,40 @@ et `keybuilder/docs/TECHNICAL.md` (architecture).
 - **HTTPS local** : non fourni. Rester en `bind_host=127.0.0.1` pour toute
   utilisation sensible. Le mode LAN (`0.0.0.0`) est en HTTP en clair —
   documenté comme limitation.
-- **Vérification Ed25519** : implémentée (Phase 6) mais **désactivée par
-  défaut** (`security.require_signature=false`). Activez-la sur les
-  livraisons signées uniquement.
+- **Vérification Ed25519** : implémentée (Phase 6). La clé publique
+  fabricant est embarquée dans `config/public.pem` (livrée avec la
+  distribution). La clé privée `keys/private.pem` **ne doit JAMAIS être
+  commitée ni distribuée** : elle est conservée hors ligne par l'opérateur
+  fabricant (recommandé : HSM matériel, YubiKey PIV, coffre-fort chiffré
+  VeraCrypt, ou clé USB dédiée air-gapped). Voir §Publier une release
+  signée ci-dessous. La vérification est **désactivée par défaut**
+  (`security.require_signature=false`) et à activer sur les livraisons
+  signées uniquement.
+
+### Publier une release signée (procédure fabricant)
+
+```bash
+# 1) Générer la paire (une fois pour toutes, à conserver hors ligne)
+python3 scripts/sign-release.py generate-keypair --out keys
+#    → keys/private.pem (0600, à archiver hors ligne)
+#    → keys/public.pem  (à embarquer dans config/public.pem à chaque release)
+
+# 2) Signer le manifest de la release
+python3 scripts/sign-release.py sign release.json --key keys/private.pem
+#    → release.json.sig (base64, à embarquer dans la distribution)
+
+# 3) Copier la clé publique (une seule fois, ou à chaque rotation de clé)
+cp keys/public.pem config/public.pem
+git add config/public.pem release.json release.json.sig
+git commit -m "release: v1.0.0 signée Ed25519"
+
+# 4) Activer la vérification stricte côté utilisateur final
+#    → dans config/settings.json : "security": { "require_signature": true }
+```
+
+**Le fingerprint de la clé publique** (SHA-256 DER) doit être publié hors bande
+(site officiel, keybase, canal privé opérateur) pour que les clients puissent
+valider `config/public.pem` avant d'activer `require_signature=true`.
 - **Zero-trace forensique complet** : les logs sont métadonnées uniquement
   (aucun contenu utilisateur), les conversations sont écrites dans
   `data/conversations.json` (à chiffrer via VeraCrypt / BitLocker / LUKS

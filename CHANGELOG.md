@@ -6,6 +6,12 @@
 - **Vérification Ed25519 réelle du manifest** (`app/security/manifest_verifier.py`) :
   signature détachée `release.json.sig` + clé publique `config/public.pem`.
   `cryptography==43.0.1` ajouté à `app/requirements.txt`.
+- **Paire Ed25519 fabricant générée** :
+  - `keys/public.pem` + `config/public.pem` (fingerprint DER SHA-256 :
+    `5fb63dd2af1dbef89ad954846b7b5c9315919daa90b8f7e84d651723bc9fb10b`).
+  - `keys/private.pem` **jamais commitée** (gitignored + procédure hors ligne
+    documentée dans `README.md §11`).
+  - `release.json.sig` de la v1.0.0 embarqué dans le dépôt.
 - **Scripts de packaging portable** :
   - `scripts/build-portable.sh` : distribution assemblée par plateforme
     (`--target linux-x64|linux-arm64|macos-x64|macos-arm64|windows-x64|all`),

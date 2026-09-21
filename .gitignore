@@ -53,7 +53,12 @@ keybuilder/**/obj/
 keybuilder/artifacts/
 
 # Clés privées Ed25519 (fabricant) — ne jamais commiter.
+# La clé PUBLIQUE (keys/public.pem) peut être publiée : elle est
+# embarquée dans config/public.pem à chaque release signée.
 keys/private.pem
+
+# Artefacts de l'environnement de développement (hors périmètre produit).
+memory/
 
 # Distribution portable générée par scripts/build-portable.sh
 dist/

@@ -28,38 +28,49 @@
 
 **Sous-total Key Builder Core : 28 / 28 verts.**
 
-## Preuve de vérification Ed25519 (Phase 6, exigence P0)
+## Preuve de vérification Ed25519 (Phase 6, exigence P0) — CHAÎNE COMPLÈTE
 
-Séquence exécutée à 18:41 UTC — sortie brute des commandes :
+**Fingerprint clé publique fabricant** (SHA-256 DER) :
+`5fb63dd2af1dbef89ad954846b7b5c9315919daa90b8f7e84d651723bc9fb10b`
+
+Séquence exécutée à 18:56 UTC sur le `release.json` v1.0.0 réel du dépôt —
+sortie brute des 4 étapes :
 
 ```
-$ python3 scripts/sign-release.py generate-keypair --out /tmp/ed_test
-[sign-release] Paire générée dans /tmp/ed_test/
-  - private.pem  (mode 0600)
-  - public.pem   (à distribuer, à embarquer dans config/public.pem)
+$ python3 scripts/sign-release.py generate-keypair --out keys
+[sign-release] Paire générée dans keys/
+  - private.pem  (mode 0600) → gitignored, custody hors ligne opérateur
+  - public.pem   → copiée dans config/public.pem (embarquée dans la release)
   Fingerprint (SHA-256 de la clé publique DER) :
-    4c82f60fcfb3e82c45a71d0963f9a9afc7260b92181719e8581355c8a8163740
+    5fb63dd2af1dbef89ad954846b7b5c9315919daa90b8f7e84d651723bc9fb10b
 
-$ python3 scripts/sign-release.py sign /tmp/ed_test/release.json --key /tmp/ed_test/private.pem
-[sign-release] Signature écrite : /tmp/ed_test/release.json.sig
+$ cp keys/public.pem config/public.pem   # embarquée dans la distribution
+
+$ python3 scripts/sign-release.py sign release.json --key keys/private.pem
+[sign-release] Signature écrite : release.json.sig
   Digest SHA-256 payload canonique : b1a046773b28f81271f37b5c91ccdfef2939740c1081507f8bd9aaf375764139
 
-$ python3 scripts/sign-release.py verify /tmp/ed_test/release.json --key /tmp/ed_test/public.pem
-[sign-release] Signature OK        ← exit 0
+$ python3 scripts/sign-release.py verify release.json --key config/public.pem
+[sign-release] Signature OK        ← exit 0 (manifest v1.0.0 réel)
 
-# Altération d'un octet (`product` → "TAMPERED")
-$ python3 scripts/sign-release.py verify /tmp/ed_test/release.json --key /tmp/ed_test/public.pem
-[sign-release] Signature INVALIDE  ← exit 2
+# TAMPERING : on altère le hash SHA-256 d'un skill dans une copie
+$ cp release.json /tmp/release.tampered.json
+$ python3 -c "import json,pathlib; p=pathlib.Path('/tmp/release.tampered.json');
+    d=json.loads(p.read_text());
+    d['skills']['cybersec@1.0.0']={'sha256_tampered':'aaaaaaaaaaaa...'};
+    p.write_text(json.dumps(d,ensure_ascii=False))"
+$ python3 scripts/sign-release.py verify /tmp/release.tampered.json --key config/public.pem
+[sign-release] Signature INVALIDE  ← exit 2 (altération détectée)
 ```
 
 Test du module `app/security/manifest_verifier.py` (mêmes clés / manifests) :
 
-| Cas de test                                                       | Attendu     | Obtenu      | Statut |
-|-------------------------------------------------------------------|-------------|-------------|--------|
-| `require_signature=false` + manifest non signé                    | `ok=True` + AVERTISSEMENT | `ok=True`  | ✅     |
-| `require_signature=true`  + manifest non signé (pas de .sig)      | `ok=False` (refus)        | `ok=False` | ✅     |
-| `require_signature=true`  + manifest signé + clé publique valide  | `ok=True`                 | `ok=True`  | ✅     |
-| `require_signature=true`  + manifest signé mais **altéré 1 octet**| `ok=False` « Signature Ed25519 INVALIDE » | `ok=False` | ✅ |
+| # | Cas de test                                                                    | Attendu                                    | Obtenu       | Statut |
+|---|--------------------------------------------------------------------------------|--------------------------------------------|--------------|--------|
+| 1 | `require_signature=false` + manifest non signé                                 | `ok=True` + AVERTISSEMENT                  | `ok=True`    | ✅     |
+| 2 | `require_signature=true`  + manifest non signé (pas de .sig)                   | `ok=False` (refus explicite)               | `ok=False`   | ✅     |
+| 3 | `require_signature=true`  + `release.json` v1.0.0 signé + `config/public.pem`  | `ok=True` « OK (public.pem, 64o) »         | `ok=True`    | ✅     |
+| 4 | `require_signature=true`  + manifest signé mais **hash altéré 1 octet**        | `ok=False` « Signature Ed25519 INVALIDE »  | `ok=False`   | ✅     |
 
 ## Critères d'acceptation — statut honnête
 
