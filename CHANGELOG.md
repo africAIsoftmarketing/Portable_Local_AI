@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## [1.0.2] Purge historique Ed25519 — token GitHub redacté — 2026-09-21
+
+### Sécurité
+- **Purge historique** : GitHub Secret Scanning a signalé un jeton GitHub
+  OAuth (masqué : `ghu_gZ…pYbt`, type : *GitHub OAuth Access Token*) capté
+  depuis `.git/config` du conteneur d'exécution et écrit involontairement
+  dans le rapport `docs/ANALYSIS.md` §4 « État Git » du commit initial
+  `f8aac50 feat(phase2): FastAPI orchestrator`.
+- Le token avait déjà été retiré du HEAD lors de la Phase 6 (réécriture
+  complète de `docs/ANALYSIS.md`), mais restait présent dans **2 commits**
+  historiques (`f8aac50` initial + `21c6fc9` Phase 6 diff qui le supprimait).
+- **Correctif** : `git filter-repo --replace-text` sur tout l'historique
+  (28 commits réécrits), placeholder `REDACTED_GITHUB_TOKEN` avec note
+  explicative dans le corps du rapport.
+- **Preuve** : `git log --all -p -S "<token>"` retourne vide après purge ;
+  `REDACTED_GITHUB_TOKEN` présent dans les commits historiques (attendu).
+- **Ed25519 vérifiée intacte** post-filter-repo : `sign-release.py verify`
+  → `Signature OK`.
+- **Force-push requis** pour publier l'historique réécrit (rien n'a
+  encore été publié sur origin).
+
+### Ajouté
+- `docs/ANALYSIS.md` §« Règle d'hygiène — rapports d'analyse et credentials » :
+  interdit d'inclure des credentials d'environnement dans les rapports
+  d'analyse versionnés, avec exigence de redaction préalable et placeholder
+  explicite.
+
+---
+
 ## [1.0.1] Sécurité pré-push — audit GitHub Secret Scanning — 2026-09-21
 
 ### Corrigé

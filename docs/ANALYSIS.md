@@ -528,3 +528,22 @@ finition (naming, doc, signature runtime, i18n JSON).
 
 **Fin du rapport d'analyse Phase 0.** Aucun fichier existant du dépôt n'a
 été modifié pendant cette phase ; seul `docs/ANALYSIS.md` a été (ré)écrit.
+
+---
+
+## Règle d'hygiène — rapports d'analyse et credentials
+
+**Ne JAMAIS inclure de credentials d'environnement dans un rapport d'analyse
+versionné.** Les rapports produits par une phase d'audit (comme le présent
+fichier) peuvent inspecter `.git/config`, `bash history`, les variables
+d'environnement, ou les logs d'infrastructure du conteneur d'exécution :
+tout token, mot de passe, clé API ou URL d'authentification qui y figure
+doit être **redacté avant écriture sur disque**, avec un placeholder
+explicite du type `REDACTED_GITHUB_TOKEN` accompagné d'une note explicative.
+
+Cette règle s'applique à toute nouvelle phase d'analyse et à tout export
+de logs joint à la documentation. Voir CHANGELOG.md [1.0.2] pour un
+incident historique : le rapport Phase 0 initial contenait un jeton
+GitHub OAuth (`ghu_gZ…pYbt`) capté depuis `.git/config` du conteneur ;
+il a été purgé de l'historique via `git filter-repo --replace-text`
+et remplacé par `REDACTED_GITHUB_TOKEN` dans tous les commits concernés.

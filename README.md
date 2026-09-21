@@ -419,6 +419,18 @@ valider `config/public.pem` avant d'activer `require_signature=true`.
 
 ---
 
+## 11 bis. Règle d'hygiène — jamais de credentials dans les rapports d'analyse
+
+Toute phase d'analyse ou d'audit qui produit un document versionné dans
+`docs/` **doit rédacter les credentials** trouvés dans l'environnement
+d'exécution (variables d'environnement, `.git/config`, `bash_history`,
+logs d'infrastructure) avant écriture sur disque. Utiliser un placeholder
+explicite (`REDACTED_GITHUB_TOKEN`, `REDACTED_API_KEY`, …) accompagné
+d'une note explicative. Voir `CHANGELOG.md [1.0.2]` pour l'incident
+historique corrigé sur ce dépôt.
+
+---
+
 ## 12. Licence et crédits
 
 **Licence** : MIT © 2026 AfricAIsoft. Voir `LICENSE`.
