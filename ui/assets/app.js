@@ -14,9 +14,14 @@
     const API_KEY = localStorage.getItem("studio_api_key") || null;
 
     // ── État global ──────────────────────────────────────────────────────────
+    // Validation stricte : seules "fr" et "en" sont acceptées, sinon détection
+    // du navigateur. Idem thème (déjà robuste).
+    function validLang(v)  { return (v === "fr" || v === "en") ? v : null; }
+    function validTheme(v) { return (v === "dark" || v === "light") ? v : null; }
+
     const state = {
-        lang:   readStored("studio_lang", detectLang()),
-        theme:  readStored("studio_theme", detectTheme()),
+        lang:   validLang(localStorage.getItem("studio_lang"))   || detectLang(),
+        theme:  validTheme(localStorage.getItem("studio_theme")) || detectTheme(),
         translations: {},
         currentConversationId: null,
         conversations: [],
@@ -90,10 +95,25 @@
 
     // ── Thème ───────────────────────────────────────────────────────────────
     function applyTheme(theme) {
-        document.documentElement.setAttribute("data-theme", theme);
-        localStorage.setItem("studio_theme", theme);
+        const t = validTheme(theme) || "light";
+        state.theme = t;
+        document.documentElement.setAttribute("data-theme", t);
+        localStorage.setItem("studio_theme", t);
         const icon = $(".theme-icon");
-        if (icon) icon.textContent = theme === "dark" ? "☀" : "◐";
+        if (icon) icon.textContent = t === "dark" ? "☀" : "◐";
+    }
+
+    // ── Langue (même pattern strict que le thème) ───────────────────────────
+    // Écriture localStorage UNIQUEMENT ici (au clic ou lors d'un changement
+    // explicite). Aucun `setItem` à l'init : la valeur en localStorage
+    // n'est jamais réécrite tant que l'utilisateur n'agit pas.
+    function applyLang(lang) {
+        const l = validLang(lang) || "fr";
+        state.lang = l;
+        document.documentElement.lang = l;
+        localStorage.setItem("studio_lang", l);
+        const sel = $("#lang-select");
+        if (sel && sel.value !== l) sel.value = l;
     }
 
     // ── Health polling ──────────────────────────────────────────────────────
@@ -717,26 +737,27 @@
 
     // ── Bootstrap ───────────────────────────────────────────────────────────
     document.addEventListener("DOMContentLoaded", async () => {
-        // Thème persistant
-        applyTheme(state.theme === "dark" ? "dark" : "light");
+        // Thème persistant (validation stricte + application immédiate).
+        applyTheme(state.theme);
         $("#theme-toggle").addEventListener("click", () => {
-            state.theme = state.theme === "dark" ? "light" : "dark";
-            applyTheme(state.theme);
+            applyTheme(state.theme === "dark" ? "light" : "dark");
         });
-        // Langue persistante
+        // Langue persistante (MÊME pattern que le thème : validation stricte
+        // au boot, écriture localStorage uniquement au change réel).
         const langSelect = $("#lang-select");
         langSelect.value = state.lang;
         langSelect.addEventListener("change", async e => {
-            state.lang = e.target.value === "en" ? "en" : "fr";
-            localStorage.setItem("studio_lang", state.lang);
-            await loadI18n(state.lang);
+            const chosen = validLang(e.target.value) || "fr";
+            applyLang(chosen);
+            await loadI18n(chosen);
             renderConversationList();
             renderPlatformInfo(); renderPerfInfo();
             if (state.skills) renderSkills();
             await refreshRagDocuments();
             await refreshModels();
         });
-        localStorage.setItem("studio_lang", state.lang);
+        // Alignement du <html lang="…"> dès le boot sans réécrire localStorage.
+        document.documentElement.lang = state.lang;
         await loadI18n(state.lang);
 
         // Conversations

@@ -100,10 +100,18 @@ def build_studio_router() -> APIRouter:
         if settings.system_prompt.locked:
             raise HTTPException(status_code=403,
                                 detail="System prompt verrouillé (locked=true).")
-        content = read_current_prompt()
+        # Correctif : si un preset est actif, on renvoie SON contenu (celui qui
+        # sera injecté par le résolveur lors des complétions). Sinon on retombe
+        # sur le fichier custom, puis sur le défaut fabricant.
+        active = settings.system_prompt.active_preset
+        content = None
+        if active:
+            content = load_preset(active)
+        if content is None:
+            content = read_current_prompt()
         return {
             "content": content,
-            "active_preset": settings.system_prompt.active_preset,
+            "active_preset": active,
             "source": _source_of(settings, content),
             "token_count_approx": approximate_token_count(content),
             "locked": False,
