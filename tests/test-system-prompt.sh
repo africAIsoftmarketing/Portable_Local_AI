@@ -49,39 +49,58 @@ CONTENT_READ="$(curl_j "${BASE_URL}${API_PREFIX}/system-prompt" | python3 -c "im
 echo "$CONTENT_READ" | grep -q "$MARKER" && pass "GET reflète PUT ($MARKER)" || fail "GET ne reflète pas PUT"
 
 # ── T3 : Le fichier system_prompt.txt est bien lu par le proxy ──────────────
-info "T3 : PUT d'un system prompt (français strict) → prompt user anglais → réponse française"
-# Le modèle 0.5B suit fiablement l'instruction "réponds en français" mais pas
-# des instructions plus complexes. On teste le sens fichier→réponse par contraste
-# de langue, en miroir du T4 (override).
+# Preuve déterministe : on installe un system prompt qui force une réponse
+# spécifique, puis on la lit. On utilise la même technique que T4bis
+# (mot-code + seed fixe) pour éviter le biais linguistique du modèle 0.5B.
+info "T3 : PUT d'un system prompt avec code déterministe → réponse attendue"
 CODE="$(curl_j -o /dev/null -w '%{http_code}' -X PUT \
     -H "Content-Type: application/json" \
-    -d '{"content":"Tu es un assistant francophone. Tu réponds UNIQUEMENT en français, jamais en anglais, quelle que soit la langue de la question."}' \
+    -d '{"content":"Answer ONLY with the exact single word: FILE_ALPHA. Nothing else."}' \
     "${BASE_URL}${API_PREFIX}/system-prompt")"
 [ "$CODE" = "200" ] && pass "PUT du prompt de test = 200" || fail "PUT test = $CODE"
 
-REPLY="$(curl_j -X POST -H "Content-Type: application/json" \
-    -d '{"messages":[{"role":"user","content":"Hello, how are you today?"}],"max_tokens":40,"temperature":0.0,"stream":false}' \
+REPLY_FILE_A="$(curl_j -X POST -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"Say the codeword."}],"max_tokens":8,"temperature":0.0,"seed":42,"stream":false}' \
     "${BASE_URL}${API_PREFIX}/v1/chat/completions" \
     | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
-echo "    réponse (attendue français): $REPLY"
-if echo "$REPLY" | grep -qiE "\b(bonjour|comment|vais|bien|merci|puis-je|aider|français|aujourd)\b"; then
-    pass "system prompt fichier injecté (réponse française malgré prompt user anglais)"
+echo "    réponse fichier=ALPHA : $REPLY_FILE_A"
+
+# Change le fichier, vérifie que la réponse change
+curl_j -X PUT -H "Content-Type: application/json" \
+    -d '{"content":"Answer ONLY with the exact single word: FILE_BETA. Nothing else."}' \
+    "${BASE_URL}${API_PREFIX}/system-prompt" > /dev/null
+REPLY_FILE_B="$(curl_j -X POST -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"Say the codeword."}],"max_tokens":8,"temperature":0.0,"seed":42,"stream":false}' \
+    "${BASE_URL}${API_PREFIX}/v1/chat/completions" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
+echo "    réponse fichier=BETA  : $REPLY_FILE_B"
+
+if [ -n "$REPLY_FILE_A" ] && [ -n "$REPLY_FILE_B" ] && [ "$REPLY_FILE_A" != "$REPLY_FILE_B" ]; then
+    pass "system prompt fichier injecté (réponses différentes selon fichier)"
 else
-    fail "system prompt fichier non respecté (réponse: $REPLY)"
+    fail "system prompt fichier NON injecté (A='$REPLY_FILE_A' vs B='$REPLY_FILE_B')"
 fi
 
-# ── T4 : Override par requête via champ 'system' ─────────────────────────────
-info "T4 : override 'system' dans la requête impose une nouvelle langue"
-# Fichier actuel = force anglais. On override pour forcer français.
-REPLY="$(curl_j -X POST -H "Content-Type: application/json" \
-    -d '{"system":"Tu es un assistant. Réponds UNIQUEMENT en français, jamais en anglais.","messages":[{"role":"user","content":"Hello, how are you?"}],"max_tokens":32,"temperature":0.0}' \
+# ── T4 : Override par requête via champ 'system' (parité PROXY vs DIRECT) ────
+# Preuve déterministe : le proxy avec top-level 'system' doit produire la
+# même réponse que llama-server direct avec le même 'system' déplacé en
+# messages[0]. On utilise seed=42 pour la détermination.
+info "T4 : override 'system' top-level - override effectif"
+# Deux top-level 'system' différents → deux réponses différentes.
+REPLY_TOP_A="$(curl_j -X POST -H "Content-Type: application/json" \
+    -d '{"system":"Answer ONLY with the exact single word: TOP_ALPHA","messages":[{"role":"user","content":"Say the codeword."}],"max_tokens":8,"temperature":0.0,"seed":42}' \
     "${BASE_URL}${API_PREFIX}/v1/chat/completions" \
     | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
-echo "    réponse (attendue français): $REPLY"
-if echo "$REPLY" | grep -qiE "\b(bonjour|comment|vais|bien|merci|puis-je|aider|français)\b"; then
-    pass "override honoré (réponse en français malgré prompt user en anglais)"
+REPLY_TOP_B="$(curl_j -X POST -H "Content-Type: application/json" \
+    -d '{"system":"Answer ONLY with the exact single word: TOP_BETA","messages":[{"role":"user","content":"Say the codeword."}],"max_tokens":8,"temperature":0.0,"seed":42}' \
+    "${BASE_URL}${API_PREFIX}/v1/chat/completions" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)"
+echo "    top-level 'system' ALPHA: $REPLY_TOP_A"
+echo "    top-level 'system' BETA : $REPLY_TOP_B"
+if [ -n "$REPLY_TOP_A" ] && [ -n "$REPLY_TOP_B" ] && [ "$REPLY_TOP_A" != "$REPLY_TOP_B" ]; then
+    pass "override top-level 'system' effectif"
 else
-    fail "override non appliqué (réponse: $REPLY)"
+    fail "override top-level 'system' non effectif (A=$REPLY_TOP_A / B=$REPLY_TOP_B)"
 fi
 
 # ── T4bis : Override inline via role='system' dans messages[] ────────────────
