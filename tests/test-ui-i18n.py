@@ -64,18 +64,42 @@ async def cycle(page, target: str, expected_label: dict, r: Report):
     await page.wait_for_function(
         f"() => localStorage.getItem('studio_lang') === '{target}' "
         f"&& document.getElementById('lang-select').value === '{target}'",
-        timeout=3000,
+        timeout=5000,
     )
     st_before = await dump_state(page)
     print(f"    avant reload : {st_before}")
-    # Reload (hard : bypass cache) + attend rehydratation
-    await page.reload(wait_until="networkidle")
+    # Reload (bypass cache) + mesure de la fenêtre anti-FOUT.
+    await page.reload(wait_until="domcontentloaded")
+
+    # Vérifie IMMÉDIATEMENT après DOMContentLoaded : l'UI DOIT être masquée
+    # (booting class OU visibility:hidden). C'est la preuve que la course
+    # ne peut pas afficher de labels dans la mauvaise langue.
+    booting = await page.evaluate(
+        """() => ({
+            hasBootingClass: document.body.classList.contains('booting'),
+            visibility: getComputedStyle(document.body).visibility,
+        })"""
+    )
+    print(f"    à DOMContentLoaded : {booting}")
+    if booting["hasBootingClass"] or booting["visibility"] == "hidden":
+        r.ok("UI masquée pendant le chargement i18n (anti-FOUT actif)")
+    else:
+        r.ko(f"UI visible AVANT chargement i18n (booting={booting}) — race possible")
+
+    # Attend la fin du booting + hydratation du dictionnaire.
+    await page.wait_for_function(
+        "() => !document.body.classList.contains('booting')",
+        timeout=8000,
+    )
     await page.wait_for_function(
         f"() => document.getElementById('lang-select').value === '{target}'",
         timeout=3000,
     )
+    # Le welcome hint est ajouté après Promise.all (refresh health/conv/skills).
+    # On attend qu'il apparaisse pour ne pas capturer un DOM prématuré.
+    await page.wait_for_selector('.msg-hint', timeout=5000)
     st_after = await dump_state(page)
-    print(f"    après reload : {st_after}")
+    print(f"    après booting : {st_after}")
 
     if st_after["ls"] == target:
         r.ok(f"localStorage.studio_lang == '{target}' après reload")
@@ -122,12 +146,25 @@ async def main() -> int:
     r = Report()
     print("=" * 58)
     print(f"  test-ui-i18n.py : {URL}")
+    print("  (avec latence RÉSEAU simulée 700 ms sur les fichiers i18n)")
     print("=" * 58)
 
     async with async_playwright() as pw:
         # Utilise le chromium préinstallé (headless_shell suffit pour ce test).
         browser = await pw.chromium.launch(headless=True)
         context = await browser.new_context()
+
+        # ── Simulation de latence réseau sur les fichiers i18n ──────────────
+        # C'est LA preuve que la race d'hydratation est morte : même avec
+        # 700 ms de délai sur en.json / fr.json, les labels affichés doivent
+        # rester cohérents avec le <select> et localStorage après reload.
+        async def _delay_i18n(route, request):
+            if "/assets/i18n/" in request.url:
+                await asyncio.sleep(0.7)
+            await route.continue_()
+
+        await context.route("**/*", _delay_i18n)
+
         page = await context.new_page()
 
         # Page vierge : purge tout état, puis reload pour partir clean.

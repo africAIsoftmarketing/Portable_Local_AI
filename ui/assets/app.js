@@ -67,10 +67,25 @@
     }
 
     // ── I18n ────────────────────────────────────────────────────────────────
+    // Chargement STRICTEMENT séquentiel : on ne rend AUCUN texte avant que
+    // le dictionnaire de la langue active ne soit résolu. Un try/finally
+    // dans le bootstrap retire la classe `booting` du <body> pour éviter
+    // que l'UI reste invisible si le fetch échoue.
     async function loadI18n(lang) {
-        const r = await fetch(`${API_PREFIX}/assets/i18n/${lang}.json?_=${Date.now()}`,
-                              { cache: "no-store" });
-        state.translations = await r.json();
+        const url = `${API_PREFIX}/assets/i18n/${lang}.json?_=${Date.now()}`;
+        try {
+            const r = await fetch(url, { cache: "no-store" });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            state.translations = await r.json();
+        } catch (e) {
+            // En cas d'échec réseau, on n'écrase pas les traductions
+            // précédentes : cela permet de conserver l'affichage courant
+            // au lieu de retomber sur les data-i18n keys.
+            console.warn("i18n load failed for", lang, e);
+            if (!state.translations || !Object.keys(state.translations).length) {
+                state.translations = {};
+            }
+        }
         document.documentElement.lang = lang;
         applyI18n();
     }
@@ -758,7 +773,15 @@
         });
         // Alignement du <html lang="…"> dès le boot sans réécrire localStorage.
         document.documentElement.lang = state.lang;
-        await loadI18n(state.lang);
+        // Chargement STRICTEMENT bloquant du dictionnaire i18n de la langue
+        // active AVANT tout premier rendu de texte. On retire la classe
+        // `booting` (qui masque l'UI) seulement une fois applyI18n effectué.
+        // try/finally garantit que l'UI apparaît même en cas d'échec réseau.
+        try {
+            await loadI18n(state.lang);
+        } finally {
+            document.body.classList.remove("booting");
+        }
 
         // Conversations
         $("#conversation-new-btn").addEventListener("click", createConversation);

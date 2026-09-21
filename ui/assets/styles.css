@@ -70,6 +70,26 @@ body {
 
 ::selection { background: var(--accent-glow); color: var(--ink); }
 
+/* ── Anti-FOUT : masque l'UI tant que le dictionnaire i18n n'est pas chargé.
+   Sans cette règle, le HTML pré-rendu (avec &nbsp; ou anciennes chaînes) est
+   visible pendant que fetch(en.json) se résout → désync select/labels. */
+body.booting { visibility: hidden; }
+body.booting::after {
+    /* Point de repli visuel discret pour ne pas afficher un écran blanc
+       si le fetch i18n prend >1 s. Le splash reste caché tant que le
+       navigateur n'a pas peint le body (opacité 1 seulement après ≥300 ms). */
+    content: "";
+    visibility: visible;
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 9999;
+    display: block;
+    pointer-events: none;
+    opacity: 0;
+    animation: booting-splash 300ms 300ms forwards;
+}
+@keyframes booting-splash { to { opacity: 1; } }
+
 /* ─────────────────────────────────────────────────────── TOPBAR */
 .topbar {
     display: flex; justify-content: space-between; align-items: center;

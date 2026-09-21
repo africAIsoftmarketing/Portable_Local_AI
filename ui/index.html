@@ -4,17 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-i18n="app.title">AfricAIsoft Portable Studio</title>
-    <link rel="stylesheet" href="assets/styles.css?v=20260921-2" />
+    <link rel="stylesheet" href="assets/styles.css?v=20260921-3" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232f5c3a%22/><text x=%2250%22 y=%2270%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-size=%2270%22 fill=%22%23f6f2ea%22>A</text></svg>" />
 </head>
-<body>
+<body class="booting">
 
 <header class="topbar" data-testid="topbar">
     <div class="brand">
         <span class="logo" aria-hidden="true">A</span>
         <div>
-            <div class="brand-name" data-i18n="app.title">AfricAIsoft Portable Studio</div>
-            <div class="brand-tag" data-i18n="tagline">Assistant IA local &amp; confidentiel</div>
+            <div class="brand-name" data-i18n="app.title">&nbsp;</div>
+            <div class="brand-tag" data-i18n="tagline">&nbsp;</div>
         </div>
     </div>
     <div class="topbar-actions">
@@ -22,7 +22,7 @@
               data-testid="health-badge"
               data-i18n-title="health.tooltip">…</span>
         <button id="theme-toggle" class="icon-btn" data-testid="theme-toggle"
-                data-i18n-title="theme.toggle" title="Basculer thème">
+                data-i18n-title="theme.toggle" title="">
             <span class="theme-icon" aria-hidden="true">◐</span>
         </button>
         <select id="lang-select" data-testid="lang-select"
@@ -38,7 +38,7 @@
     <!-- ═════════════════════════════════════════════════════════ SIDEBAR -->
     <aside class="conversations-sidebar" data-testid="conversations-sidebar">
         <div class="sidebar-header">
-            <h2 data-i18n="conversations.title">Conversations</h2>
+            <h2 data-i18n="conversations.title">&nbsp;</h2>
             <button id="conversation-new-btn" class="pill-btn"
                     data-testid="conversation-new-btn"
                     data-i18n-title="conversations.new">＋</button>
@@ -47,7 +47,7 @@
              data-testid="conversation-list"></div>
         <div class="sidebar-footer">
             <span id="conversation-count" class="muted">0</span>
-            <span class="muted" data-i18n="conversations.stored">stockées localement</span>
+            <span class="muted" data-i18n="conversations.stored">&nbsp;</span>
         </div>
     </aside>
 
@@ -59,20 +59,20 @@
                     <input id="chat-title-input" class="chat-title" spellcheck="false"
                            data-testid="chat-title-input"
                            data-i18n-placeholder="chat.untitled"
-                           placeholder="Nouvelle conversation" readonly />
+                           placeholder="" readonly />
                     <button id="chat-rename-btn" class="icon-btn ghost"
                             data-testid="chat-rename-btn"
-                            data-i18n-title="chat.rename" title="Renommer">✎</button>
+                            data-i18n-title="chat.rename" title="">✎</button>
                     <button id="chat-delete-btn" class="icon-btn ghost danger"
                             data-testid="chat-delete-btn"
-                            data-i18n-title="chat.delete" title="Supprimer">✕</button>
+                            data-i18n-title="chat.delete" title="">✕</button>
                 </div>
                 <div class="chat-subtitle">
-                    <span data-i18n="chat.modelLabel">Modèle :</span>
+                    <span data-i18n="chat.modelLabel">&nbsp;</span>
                     <span id="model-name" data-testid="model-name">–</span>
                     <span class="dot">·</span>
                     <span id="stream-status" data-testid="stream-status"
-                          data-i18n="chat.idle">Prêt</span>
+                          data-i18n="chat.idle">&nbsp;</span>
                 </div>
             </div>
         </div>
@@ -83,10 +83,10 @@
             <textarea id="chat-input" rows="2"
                       data-testid="chat-input"
                       data-i18n-placeholder="chat.placeholder"
-                      placeholder="Écrivez votre message... (Entrée = envoyer, Maj+Entrée = saut de ligne)"
+                      placeholder=""
                       required></textarea>
             <button id="chat-send-btn" type="submit" class="send-btn"
-                    data-testid="chat-send-btn" data-i18n="chat.send">Envoyer</button>
+                    data-testid="chat-send-btn" data-i18n="chat.send">&nbsp;</button>
         </form>
     </section>
 
@@ -94,27 +94,27 @@
     <aside class="right-panel" data-testid="right-panel">
         <nav class="tabs" role="tablist">
             <button class="tab active" data-tab="skills" data-testid="tab-skills"
-                    data-i18n="tabs.skills">Skills</button>
+                    data-i18n="tabs.skills">&nbsp;</button>
             <button class="tab" data-tab="models" data-testid="tab-models"
-                    data-i18n="tabs.models">Modèles</button>
+                    data-i18n="tabs.models">&nbsp;</button>
             <button class="tab" data-tab="systemprompt" data-testid="tab-systemprompt"
-                    data-i18n="tabs.systemprompt">System prompt</button>
+                    data-i18n="tabs.systemprompt">&nbsp;</button>
             <button class="tab" data-tab="config" data-testid="tab-config"
-                    data-i18n="tabs.config">Config</button>
+                    data-i18n="tabs.config">&nbsp;</button>
         </nav>
 
         <!-- ── Onglet Skills + RAG ──────────────────────────────────────── -->
         <section id="panel-skills" class="tab-panel active" data-testid="panel-skills">
             <div class="panel-block">
-                <h3 data-i18n="skills.title">Outils MCP</h3>
+                <h3 data-i18n="skills.title">&nbsp;</h3>
                 <div id="skills-list" data-testid="skills-list" class="skills-list"></div>
             </div>
             <div class="panel-block">
                 <div class="row-between">
-                    <h3 data-i18n="rag.title">Base de connaissances (RAG)</h3>
+                    <h3 data-i18n="rag.title">&nbsp;</h3>
                     <button id="rag-reindex-btn" class="pill-btn"
                             data-testid="rag-reindex-btn"
-                            data-i18n="rag.reindex">Réindexer</button>
+                            data-i18n="rag.reindex">&nbsp;</button>
                 </div>
                 <div id="rag-status" class="muted" data-testid="rag-status">–</div>
                 <ul id="rag-documents" class="rag-list"
@@ -126,19 +126,17 @@
         <section id="panel-models" class="tab-panel" data-testid="panel-models">
             <div class="panel-block">
                 <div class="row-between">
-                    <h3 data-i18n="models.title">Modèles disponibles</h3>
+                    <h3 data-i18n="models.title">&nbsp;</h3>
                     <button id="models-refresh-btn" class="pill-btn ghost"
                             data-testid="models-refresh-btn"
                             data-i18n="models.refresh">↻</button>
                 </div>
                 <div id="models-list" class="models-list"
                      data-testid="models-list"></div>
-                <p class="muted small" data-i18n="models.hint">
-                    La bascule décharge le modèle courant puis charge le nouveau (~5-30 s).
-                </p>
+                <p class="muted small" data-i18n="models.hint">&nbsp;</p>
             </div>
             <div class="panel-block">
-                <h3 data-i18n="platform.title">Plateforme</h3>
+                <h3 data-i18n="platform.title">&nbsp;</h3>
                 <dl id="platform-info" class="kv" data-testid="platform-info"></dl>
             </div>
         </section>
@@ -147,11 +145,11 @@
         <section id="panel-systemprompt" class="tab-panel" data-testid="panel-systemprompt">
             <div id="sp-locked-banner" class="banner hidden"
                  data-testid="sp-locked-banner"
-                 data-i18n="sysprompt.locked">Verrouillé par l'administrateur</div>
+                 data-i18n="sysprompt.locked">&nbsp;</div>
             <div class="panel-block">
-                <h3 data-i18n="sysprompt.title">System prompt actif</h3>
+                <h3 data-i18n="sysprompt.title">&nbsp;</h3>
                 <div class="sp-presets" data-testid="sp-presets">
-                    <span class="muted small" data-i18n="sysprompt.presets">Presets :</span>
+                    <span class="muted small" data-i18n="sysprompt.presets">&nbsp;</span>
                     <span id="sp-presets-buttons"></span>
                 </div>
                 <textarea id="sp-textarea" rows="14" spellcheck="false"
@@ -159,16 +157,16 @@
                           data-i18n-placeholder="sysprompt.placeholder"></textarea>
                 <div class="sp-meta">
                     <span id="sp-token-count" data-testid="sp-token-count">0</span>
-                    <span data-i18n="sysprompt.tokens">tokens (approx.)</span>
+                    <span data-i18n="sysprompt.tokens">&nbsp;</span>
                     <span class="dot">·</span>
-                    <span data-i18n="sysprompt.source">source :</span>
+                    <span data-i18n="sysprompt.source">&nbsp;</span>
                     <span id="sp-source" data-testid="sp-source">–</span>
                 </div>
                 <div class="sp-actions">
                     <button id="sp-save" data-testid="sp-save"
-                            data-i18n="sysprompt.save">Enregistrer</button>
+                            data-i18n="sysprompt.save">&nbsp;</button>
                     <button id="sp-reset" class="secondary" data-testid="sp-reset"
-                            data-i18n="sysprompt.reset">Défaut fabricant</button>
+                            data-i18n="sysprompt.reset">&nbsp;</button>
                 </div>
             </div>
         </section>
@@ -177,22 +175,20 @@
         <section id="panel-config" class="tab-panel" data-testid="panel-config">
             <div id="config-warn" class="banner hidden warn"
                  data-testid="config-warn"
-                 data-i18n="config.requiresRestart">
-                Certains changements demandent un redémarrage du studio.
-            </div>
+                 data-i18n="config.requiresRestart">&nbsp;</div>
             <div class="panel-block">
-                <h3 data-i18n="config.title">Paramètres non sensibles</h3>
+                <h3 data-i18n="config.title">&nbsp;</h3>
                 <div id="config-form" class="config-form" data-testid="config-form"></div>
                 <div class="sp-actions">
                     <button id="config-save" data-testid="config-save"
-                            data-i18n="config.save">Enregistrer</button>
+                            data-i18n="config.save">&nbsp;</button>
                     <button id="config-reload" class="secondary"
                             data-testid="config-reload"
-                            data-i18n="config.reload">Recharger</button>
+                            data-i18n="config.reload">&nbsp;</button>
                 </div>
             </div>
             <div class="panel-block">
-                <h3 data-i18n="config.perfTitle">État & performances</h3>
+                <h3 data-i18n="config.perfTitle">&nbsp;</h3>
                 <dl id="perf-info" class="kv" data-testid="perf-info"></dl>
             </div>
         </section>
@@ -200,7 +196,7 @@
     </aside>
 </main>
 
-<script src="assets/markdown.js?v=20260921-2" defer></script>
-<script src="assets/app.js?v=20260921-2" defer></script>
+<script src="assets/markdown.js?v=20260921-3" defer></script>
+<script src="assets/app.js?v=20260921-3" defer></script>
 </body>
 </html>
