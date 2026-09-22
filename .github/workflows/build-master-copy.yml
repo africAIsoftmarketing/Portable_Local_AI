@@ -7,9 +7,9 @@
 #
 # Notes    :
 #   - Le nommage des dossiers de destination suit STRICTEMENT le brief client :
-#     `bin/windows/<backend>`, `bin/macos-arm64/<backend>`,
-#     `bin/macos-x86_64/<backend>`, `bin/linux-x86_64/<backend>`,
-#     `bin/linux-arm64/<backend>`. ⚠ Les launchers existants (start-linux.sh,
+#     `bin/windows/<backend>`, `bin/darwin-arm64/<backend>`,
+#     `bin/darwin-x86_64/<backend>`, `bin/linux-x86_64/<backend>`,
+#     `bin/linux-aarch64/<backend>`. ⚠ Les launchers existants (start-linux.sh,
 #     start-mac.command, start-windows.bat, scripts/core-startup.sh) résolvent
 #     eux le chemin `bin/${os}-${arch}/${backend}` avec `${os}` = uname -s en
 #     minuscules (`linux`, `darwin`) et `${arch}` = `x86_64` / `aarch64` /
@@ -234,12 +234,12 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   # Compilation macOS (Apple Silicon + Intel)
   # ───────────────────────────────────────────────────────────────────────────
-  build-mac-arm64-metal:
+  build-darwin-arm64-metal:
     name: macOS ARM64 Metal
     needs: resolve
     runs-on: macos-14
     env:
-      OUT_DIR: bin/macos-arm64/metal
+      OUT_DIR: bin/darwin-arm64/metal
     steps:
       - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
         uses: actions/checkout@v4
@@ -267,17 +267,17 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-macos-arm64-metal
+          name: llama-darwin-arm64-metal
           path: ${{ env.OUT_DIR }}
           if-no-files-found: error
           retention-days: 7
 
-  build-mac-arm64-cpu:
+  build-darwin-arm64-cpu:
     name: macOS ARM64 CPU
     needs: resolve
     runs-on: macos-14
     env:
-      OUT_DIR: bin/macos-arm64/cpu
+      OUT_DIR: bin/darwin-arm64/cpu
     steps:
       - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
         uses: actions/checkout@v4
@@ -305,17 +305,17 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-macos-arm64-cpu
+          name: llama-darwin-arm64-cpu
           path: ${{ env.OUT_DIR }}
           if-no-files-found: error
           retention-days: 7
 
-  build-mac-x86-metal:
+  build-darwin-x86_64-metal:
     name: macOS Intel Metal
     needs: resolve
     runs-on: macos-13
     env:
-      OUT_DIR: bin/macos-x86_64/metal
+      OUT_DIR: bin/darwin-x86_64/metal
     steps:
       - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
         uses: actions/checkout@v4
@@ -343,17 +343,17 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-macos-x86_64-metal
+          name: llama-darwin-x86_64-metal
           path: ${{ env.OUT_DIR }}
           if-no-files-found: error
           retention-days: 7
 
-  build-mac-x86-cpu:
+  build-darwin-x86_64-cpu:
     name: macOS Intel CPU (AVX2)
     needs: resolve
     runs-on: macos-13
     env:
-      OUT_DIR: bin/macos-x86_64/cpu
+      OUT_DIR: bin/darwin-x86_64/cpu
     steps:
       - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
         uses: actions/checkout@v4
@@ -382,7 +382,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-macos-x86_64-cpu
+          name: llama-darwin-x86_64-cpu
           path: ${{ env.OUT_DIR }}
           if-no-files-found: error
           retention-days: 7
@@ -518,12 +518,12 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  build-linux-arm64-cpu:
+  build-linux-aarch64-cpu:
     name: Linux ARM64 CPU (NEON, cross-compile)
     needs: resolve
     runs-on: ubuntu-22.04
     env:
-      OUT_DIR: bin/linux-arm64/cpu
+      OUT_DIR: bin/linux-aarch64/cpu
     steps:
       - name: Install aarch64 cross toolchain
         run: |
@@ -559,7 +559,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-linux-arm64-cpu
+          name: llama-linux-aarch64-cpu
           path: ${{ env.OUT_DIR }}
           if-no-files-found: error
           retention-days: 7
@@ -574,14 +574,14 @@ jobs:
       - build-win-cpu
       - build-win-cuda
       - build-win-vulkan
-      - build-mac-arm64-metal
-      - build-mac-arm64-cpu
-      - build-mac-x86-metal
-      - build-mac-x86-cpu
+      - build-darwin-arm64-metal
+      - build-darwin-arm64-cpu
+      - build-darwin-x86_64-metal
+      - build-darwin-x86_64-cpu
       - build-linux-x64-cpu
       - build-linux-x64-cuda
       - build-linux-x64-vulkan
-      - build-linux-arm64-cpu
+      - build-linux-aarch64-cpu
     runs-on: ubuntu-22.04
     # Permissions élevées limitées à ce job (création de release + upload).
     permissions:
@@ -639,14 +639,14 @@ jobs:
             [llama-windows-cpu]="${PKG}/bin/windows/cpu"
             [llama-windows-cuda]="${PKG}/bin/windows/cuda"
             [llama-windows-vulkan]="${PKG}/bin/windows/vulkan"
-            [llama-macos-arm64-metal]="${PKG}/bin/macos-arm64/metal"
-            [llama-macos-arm64-cpu]="${PKG}/bin/macos-arm64/cpu"
-            [llama-macos-x86_64-metal]="${PKG}/bin/macos-x86_64/metal"
-            [llama-macos-x86_64-cpu]="${PKG}/bin/macos-x86_64/cpu"
+            [llama-darwin-arm64-metal]="${PKG}/bin/darwin-arm64/metal"
+            [llama-darwin-arm64-cpu]="${PKG}/bin/darwin-arm64/cpu"
+            [llama-darwin-x86_64-metal]="${PKG}/bin/darwin-x86_64/metal"
+            [llama-darwin-x86_64-cpu]="${PKG}/bin/darwin-x86_64/cpu"
             [llama-linux-x86_64-cpu]="${PKG}/bin/linux-x86_64/cpu"
             [llama-linux-x86_64-cuda]="${PKG}/bin/linux-x86_64/cuda"
             [llama-linux-x86_64-vulkan]="${PKG}/bin/linux-x86_64/vulkan"
-            [llama-linux-arm64-cpu]="${PKG}/bin/linux-arm64/cpu"
+            [llama-linux-aarch64-cpu]="${PKG}/bin/linux-aarch64/cpu"
           )
           for name in "${!MAP[@]}"; do
               src="artifacts/${name}"
@@ -659,8 +659,8 @@ jobs:
               fi
           done
           # chmod +x sur binaires non-Windows + scripts shell.
-          find "${PKG}/bin/linux-x86_64" "${PKG}/bin/linux-arm64" \
-               "${PKG}/bin/macos-arm64" "${PKG}/bin/macos-x86_64" \
+          find "${PKG}/bin/linux-x86_64" "${PKG}/bin/linux-aarch64" \
+               "${PKG}/bin/darwin-arm64" "${PKG}/bin/darwin-x86_64" \
                -type f ! -name "*.so*" ! -name "*.dylib" -exec chmod +x {} + 2>/dev/null || true
           find "${PKG}" -maxdepth 2 -type f \( -name "*.sh" -o -name "*.command" \) -exec chmod +x {} +
 
@@ -677,15 +677,15 @@ jobs:
           mkdir -p "${PKG}/bin/windows/python"
           unzip -q /tmp/py/win.zip -d "${PKG}/bin/windows/python"
 
-          # ── python-build-standalone (astral-sh) : linux-x64, linux-arm64,
-          #    macos-arm64, macos-x86_64. Version PBS épinglée via env.PBS_TAG.
+          # ── python-build-standalone (astral-sh) : linux-x64, linux-aarch64,
+          #    darwin-arm64, darwin-x86_64. Version PBS épinglée via env.PBS_TAG.
           # Note : le nom des assets suit le format
           #   cpython-3.12.5+20240814-<triple>-install_only.tar.gz
           declare -A PBS=(
             [linux-x86_64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-x86_64-unknown-linux-gnu-install_only.tar.gz"
-            [linux-arm64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-unknown-linux-gnu-install_only.tar.gz"
-            [macos-arm64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-apple-darwin-install_only.tar.gz"
-            [macos-x86_64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-x86_64-apple-darwin-install_only.tar.gz"
+            [linux-aarch64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-unknown-linux-gnu-install_only.tar.gz"
+            [darwin-arm64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-apple-darwin-install_only.tar.gz"
+            [darwin-x86_64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-x86_64-apple-darwin-install_only.tar.gz"
           )
           for plat in "${!PBS[@]}"; do
               asset="${PBS[$plat]}"
@@ -706,29 +706,30 @@ jobs:
               tar -C "${PKG}/bin/${plat}/python" --strip-components=1 -xzf "/tmp/py/${plat}.tar.gz"
           done
 
-      - name: Pré-installe les wheels Python dans vendor/<plat>/
-        # ⚠ BLOQUANT connu : l'orchestrateur actuel (scripts/core-startup.sh
-        # + start-windows.bat) résout les wheels via `bin/<plat>/python/wheels/`
-        # et NON via `vendor/<plat>/`. Voir « BLOQUANTS » du rapport joint.
-        # On respecte le brief (vendor/<plat>/) sans modifier le code existant.
+      - name: Pré-installe les wheels Python dans bin/<plat>/python/wheels/
+        # Aligné sur les launchers existants (scripts/core-startup.sh:121 +
+        # start-windows.bat:72) qui résolvent les wheels via
+        # `bin/${PLAT_KEY}/python/wheels/` et `pip install --no-index
+        # --find-links` au premier lancement. Zéro pip install au runtime si
+        # les wheels sont pré-téléchargées ici.
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "${PKG}/vendor"
-          for plat in linux-x86_64 linux-arm64 macos-arm64 macos-x86_64; do
+          # POSIX : télécharge les wheels natives dans bin/<plat>/python/wheels/.
+          for plat in linux-x86_64 linux-aarch64 darwin-arm64 darwin-x86_64; do
               PY="${PKG}/bin/${plat}/python/bin/python3"
+              WHEELS_DIR="${PKG}/bin/${plat}/python/wheels"
               if [ -x "${PY}" ]; then
-                  mkdir -p "${PKG}/vendor/${plat}"
-                  "${PY}" -m pip install --target "${PKG}/vendor/${plat}" \
-                          --no-compile -r app/requirements.txt
+                  mkdir -p "${WHEELS_DIR}"
+                  "${PY}" -m pip download --dest "${WHEELS_DIR}" -r app/requirements.txt
               fi
           done
           # Windows : le python embeddable n'a pas de pip par défaut ; on
-          # télécharge les wheels puis on les stocke dans vendor/windows/.
-          mkdir -p "${PKG}/vendor/windows"
+          # télécharge les wheels win_amd64 depuis le pip du runner (ubuntu).
+          mkdir -p "${PKG}/bin/windows/python/wheels"
           python3 -m pip download --platform win_amd64 --python-version ${PYTHON_VERSION%.*} \
                   --only-binary=:all: --no-deps \
-                  -d "${PKG}/vendor/windows" -r app/requirements.txt || \
+                  -d "${PKG}/bin/windows/python/wheels" -r app/requirements.txt || \
               echo "::warning::Certaines wheels win_amd64 indisponibles — l'orchestrateur devra les résoudre."
 
       - name: Génère CHECKSUMS.sha256 (racine du paquet)
@@ -755,7 +756,7 @@ jobs:
               mkdir -p "${staging}/${BASE}"
               # Copie SÉLECTIVE du contenu produit (hors bin/).
               cp -a "${PKG}"/*.md "${PKG}/LICENSE" "${PKG}/VERSION" "${staging}/${BASE}/" 2>/dev/null || true
-              for item in app config mcp-servers skills scripts ui tests docs data logs models vendor \
+              for item in app config mcp-servers skills scripts ui tests docs data logs models \
                           start-linux.sh start-mac.command start-windows.bat \
                           stop-linux.sh stop-mac.sh \
                           install.sh install.bat start.sh start.bat \
@@ -787,9 +788,9 @@ jobs:
           }
 
           make_zip "windows" windows
-          make_zip "macos"   macos-arm64 macos-x86_64
-          make_zip "linux"   linux-x86_64 linux-arm64
-          make_zip "all"     windows macos-arm64 macos-x86_64 linux-x86_64 linux-arm64
+          make_zip "darwin"  darwin-arm64 darwin-x86_64
+          make_zip "linux"   linux-x86_64 linux-aarch64
+          make_zip "all"     windows darwin-arm64 darwin-x86_64 linux-x86_64 linux-aarch64
 
           ls -la dist/
 
@@ -824,7 +825,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/AfricAIsoft-Portable-v${{ env.VERSION }}-windows.zip
-            dist/AfricAIsoft-Portable-v${{ env.VERSION }}-macos.zip
+            dist/AfricAIsoft-Portable-v${{ env.VERSION }}-darwin.zip
             dist/AfricAIsoft-Portable-v${{ env.VERSION }}-linux.zip
             dist/AfricAIsoft-Portable-v${{ env.VERSION }}-all.zip
         env:

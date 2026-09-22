@@ -241,13 +241,13 @@ Seuil de validation Livrable 2 : bloc 10-14 = 100 %.
 - [ ] Pousser un tag `v1.0.0` sur `origin/main` : le workflow se déclenche automatiquement.
 - [ ] Workflow_dispatch manuel avec `version=1.0.0` : idem, produit la release.
 - [ ] Job `resolve` : sort le tag llama.cpp stable le plus récent (`bXXXX ≥ b5000`) et la version paquet.
-- [ ] 11 jobs de compilation en parallèle passent au vert : win-cpu, win-cuda, win-vulkan, mac-arm64-{metal,cpu}, mac-x86-{metal,cpu}, linux-x64-{cpu,cuda,vulkan}, linux-arm64-cpu.
+- [ ] 11 jobs de compilation en parallèle passent au vert : win-cpu, win-cuda, win-vulkan, darwin-arm64-{metal,cpu}, darwin-x86_64-{metal,cpu}, linux-x86_64-{cpu,cuda,vulkan}, linux-aarch64-cpu.
 - [ ] Chaque job upload son artefact `llama-<plat>-<backend>` (dossier `bin/<plat>/<backend>/`).
 - [ ] Job `package-release` :
   - [ ] Range chaque artefact au bon chemin `AfricAIsoft-Portable-v<VERSION>/bin/<plat>/<backend>/`.
-  - [ ] Télécharge Python 3.12 embarqué : Windows embeddable amd64 officiel + `python-build-standalone` (astral-sh) pour linux-x86_64, linux-arm64, macos-arm64, macos-x86_64.
+  - [ ] Télécharge Python 3.12 embarqué : Windows embeddable amd64 officiel + `python-build-standalone` (astral-sh) pour linux-x86_64, linux-aarch64, darwin-arm64, darwin-x86_64.
   - [ ] Vérifie **SHA-256** de chaque tarball PBS contre `.sha256` upstream ; échec explicite si mismatch.
-  - [ ] Pré-installe les wheels de `app/requirements.txt` dans `vendor/<plat>/` (voir bloquant ci-dessous).
+  - [ ] Pré-installe les wheels de `app/requirements.txt` dans `bin/<plat>/python/wheels/` (chemin exact résolu par `scripts/core-startup.sh:121` et `start-windows.bat:72`).
   - [ ] Exclut `config/settings.json` et `config/api_key.txt` du paquet (`settings.example.json` seul est livré).
   - [ ] Produit `CHECKSUMS.sha256` à la racine du paquet ET à la racine de chaque archive.
   - [ ] 4 archives ZIP : `-windows.zip`, `-macos.zip`, `-linux.zip`, `-all.zip`.

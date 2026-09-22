@@ -14,9 +14,8 @@
 #           Le nommage `<os>-<arch>` suit la convention des launchers
 #           existants (start-linux.sh, start-mac.command, start-windows.bat),
 #           soit `linux-x86_64`, `linux-aarch64`, `darwin-arm64`,
-#           `darwin-x86_64`, `windows-x86_64` (via WSL/MSYS). Cf. rapport
-#           bloquant : nommage brief client `linux-arm64` / `macos-arm64`
-#           divergent — non corrigé ici pour ne pas casser l'existant.
+#           `darwin-x86_64`, `windows-x86_64` (via WSL/MSYS). Cet aliasing
+#           est aussi utilisé par le workflow build-master-copy.yml.
 #
 # Auteur  : AfricAIsoft — Licence : MIT — Date : 2026-09-21
 # ─────────────────────────────────────────────────────────────────────────────
