@@ -21,7 +21,7 @@
     <Version>0.5.0</Version>
     <Authors>AfricAIsoft</Authors>
     <ProductName>AfricAIsoft Key Builder</ProductName>
-    <ApplicationIcon>Assets\keybuilder.ico</ApplicationIcon>
+    <!-- <ApplicationIcon>Assets\keybuilder.ico</ApplicationIcon> -->
     <NeutralLanguage>fr-FR</NeutralLanguage>
   </PropertyGroup>
   <ItemGroup>
