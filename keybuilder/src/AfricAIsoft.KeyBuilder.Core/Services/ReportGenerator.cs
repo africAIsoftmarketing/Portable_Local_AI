@@ -65,6 +65,27 @@ th{background:#eee8db}
             plan.DisabledFeatures.Count == 0 ? "(aucune)" : string.Join(", ", plan.DisabledFeatures));
         sb.Append("</dl></div>");
 
+        // Base de connaissances (RAG) : bloc affiché uniquement si l'opérateur
+        // a effectivement embarqué au moins un document (ou constaté un skip).
+        if (result.KnowledgeFilesCopied > 0 || result.KnowledgeSkipped.Count > 0)
+        {
+            sb.Append("<div class=\"card\"><h2>Base de connaissances</h2><dl>");
+            Kv(sb, "Documents copiés", result.KnowledgeFilesCopied.ToString());
+            Kv(sb, "Volume total", FmtBytes(result.KnowledgeBytes));
+            Kv(sb, "Réindexation au 1er démarrage",
+                result.KnowledgeReindexRequested ? "demandée" : "non");
+            Kv(sb, "Documents ignorés", result.KnowledgeSkipped.Count.ToString());
+            sb.Append("</dl>");
+            if (result.KnowledgeSkipped.Count > 0)
+            {
+                sb.Append("<p><b>Détails documents ignorés :</b></p><ul>");
+                foreach (var s in result.KnowledgeSkipped)
+                    sb.Append("<li>").Append(WebEncode(s)).Append("</li>");
+                sb.Append("</ul>");
+            }
+            sb.Append("</div>");
+        }
+
         sb.Append("<div class=\"card\"><h2>Résultats</h2><dl>");
         Kv(sb, "Démarré (UTC)", result.StartedAtUtc.ToString("u"));
         Kv(sb, "Terminé (UTC)", result.EndedAtUtc.ToString("u"));

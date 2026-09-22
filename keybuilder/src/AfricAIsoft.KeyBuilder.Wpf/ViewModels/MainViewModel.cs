@@ -105,7 +105,9 @@ public partial class MainViewModel : ObservableObject, IProgressReporter
         if (drive is null) { StatusText = "Sélectionnez une clé USB."; return; }
         try
         {
-            var res = await _orch.RunAsync(plan, drive, this, null, CancellationToken.None);
+            // Base de connaissances : planner (potentiellement vide) + option réindexation.
+            var res = await _orch.RunAsync(plan, drive, this, null, CancellationToken.None,
+                                            KbPlanner, KnowledgeReindexOnFirstLaunch);
             StatusText = res.Success
                 ? $"OK — {res.FilesVerified} fichiers vérifiés."
                 : $"Échec — {res.Errors.Count} erreur(s).";
@@ -125,7 +127,8 @@ public partial class MainViewModel : ObservableObject, IProgressReporter
     {
         StatusText = "Batch en cours…";
         await _batch.RunAsync((plan, prog, ct) =>
-            _orch.RunAsync(plan, SelectedDrive?.Raw, prog, null, ct),
+            _orch.RunAsync(plan, SelectedDrive?.Raw, prog, null, ct,
+                            KbPlanner, KnowledgeReindexOnFirstLaunch),
             this, CancellationToken.None);
         StatusText = "Batch terminé.";
     }

@@ -34,4 +34,17 @@ public sealed class BuildResult
     public string? SmokeTestOutcome { get; set; }
     public List<string> Errors { get; set; } = new();
     public List<string> Warnings { get; set; } = new();
+
+    // ─── Base de connaissances (RAG) ───────────────────────────────────────
+    /// <summary>Nombre de documents effectivement copiés sous knowledge/documents/.</summary>
+    public int KnowledgeFilesCopied { get; set; }
+    /// <summary>Volume total (octets) copié pour la base de connaissances.</summary>
+    public long KnowledgeBytes { get; set; }
+    /// <summary>Vrai si knowledge/.reindex a été écrit → réindexation demandée
+    /// au premier démarrage sur la clé cible.</summary>
+    public bool KnowledgeReindexRequested { get; set; }
+    /// <summary>Documents ignorés (source introuvable au moment de la copie).</summary>
+    public List<string> KnowledgeSkipped { get; set; } = new();
+    /// <summary>Chemin absolu du fichier CHECKSUMS.sha256 racine (agrège tout).</summary>
+    public string? ChecksumsFilePath { get; set; }
 }

@@ -61,7 +61,9 @@ public sealed class UsbBuildOrchestrator
         UsbDrive? targetDrive,
         IProgressReporter progress,
         Func<TargetPlatform, Task<string?>>? runSmokeTest,
-        CancellationToken ct)
+        CancellationToken ct,
+        KnowledgeBasePlanner? knowledgeBase = null,
+        bool reindexOnFirstLaunch = true)
     {
         var result = new BuildResult
         {
@@ -91,6 +93,24 @@ public sealed class UsbBuildOrchestrator
         journal.LastCompletedStage = BuildStage.Preflight;
         _journal.Save(plan.TargetRoot, journal);
 
+        // 1b. Preflight de la base de connaissances (marge +10 %). Bloquant
+        //     si l'espace résiduel après le contenu cœur ne suffit pas.
+        if (knowledgeBase is not null && knowledgeBase.Items.Count > 0 && targetDrive is not null)
+        {
+            var remaining = Math.Max(0, targetDrive.FreeSpaceBytes - pre.RequiredBytes);
+            var kbPre = knowledgeBase.Preflight(remaining);
+            if (!kbPre.EnoughSpace)
+            {
+                result.Errors.Add($"[KB_SPACE] Espace insuffisant pour la base de connaissances : "
+                    + $"{kbPre.RequiredBytesWithMargin:N0} o requis vs {kbPre.AvailableBytes:N0} o disponibles.");
+                result.EndedAtUtc = DateTime.UtcNow;
+                return result;
+            }
+            foreach (var lf in kbPre.LargeFileWarnings)
+                result.Warnings.Add($"[KB_LARGE] Document > 50 Mo (non bloquant) : "
+                    + $"{lf.RelativePath} ({lf.SizeBytes:N0} o)");
+        }
+
         // 2. Copie sélective.
         progress.ReportStep("copy", "Copie des fichiers");
         var files = PlanFiles(plan);
@@ -116,6 +136,26 @@ public sealed class UsbBuildOrchestrator
         journal.LastCompletedStage = BuildStage.Copy;
         _journal.Save(plan.TargetRoot, journal);
 
+        // 2b. Copie de la base de connaissances (si planifiée) vers
+        //     knowledge/documents/. Les hashs SHA-256 sont recalculés par le
+        //     ManifestBuilder à l'étape 4 (source de vérité unique).
+        KnowledgeBaseCopyResult? kbResult = null;
+        if (knowledgeBase is not null && knowledgeBase.Items.Count > 0)
+        {
+            progress.ReportStep("knowledge", "Copie de la base de connaissances");
+            var kbCopier = new KnowledgeBaseCopier(_fs, _checksum);
+            kbResult = await kbCopier.CopyAsync(knowledgeBase, plan.TargetRoot,
+                reindexOnFirstLaunch, MissingFileStrategy.Skip, ct);
+            result.KnowledgeFilesCopied = kbResult.CopiedFiles.Count;
+            result.KnowledgeBytes = kbResult.CopiedFiles.Sum(f => f.SizeBytes);
+            result.KnowledgeReindexRequested = kbResult.ReindexMarkerWritten;
+            foreach (var (item, reason) in kbResult.SkippedFiles)
+            {
+                result.KnowledgeSkipped.Add($"{item.RelativePath}: {reason}");
+                result.Warnings.Add($"[KB_SKIP] {item.RelativePath}: {reason}");
+            }
+        }
+
         // 3. Injection system prompt + patch settings + filtre skills sur clé.
         progress.ReportStep("configure", "Configuration de la clé");
         string? spSha = null;
@@ -129,11 +169,22 @@ public sealed class UsbBuildOrchestrator
 
         // 4. Vérification SHA-256 post-copie + manifest.
         progress.ReportStep("verify", "Vérification SHA-256 post-copie");
+        var manifestFiles = files.Select(f => (f.rel, f.cat)).ToList();
+        if (kbResult is not null)
+        {
+            foreach (var kb in kbResult.CopiedFiles)
+                manifestFiles.Add(($"{KnowledgeBaseFormats.DocumentsSubdir}/{kb.RelativePath}",
+                                   "knowledge"));
+            if (kbResult.ReindexMarkerWritten)
+                manifestFiles.Add((KnowledgeBaseFormats.ReindexMarker, "knowledge"));
+        }
         var manifest = await _manifestBuilder.BuildAsync(plan,
-            files.Select(f => (f.rel, f.cat)),
+            manifestFiles,
             spSha, progress, ct);
         result.FilesVerified = manifest.Files.Count;
         result.TotalBytes = manifest.TotalBytes;
+        // Écriture du CHECKSUMS.sha256 racine (agrège manifest + KB).
+        result.ChecksumsFilePath = WriteChecksumsFile(plan.TargetRoot, manifest);
         journal.LastCompletedStage = BuildStage.Verify;
         _journal.Save(plan.TargetRoot, journal);
         foreach (var f in manifest.Files)
@@ -253,4 +304,20 @@ public sealed class UsbBuildOrchestrator
         || path.Contains("/.git/", StringComparison.Ordinal)
         || path.Contains("\\.git\\", StringComparison.Ordinal)
         || path.EndsWith(".pyc", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Écrit un fichier CHECKSUMS.sha256 à la racine de la clé au format
+    /// standard shasum(1) : « &lt;hash&gt;  &lt;chemin&gt;\n » trié
+    /// lexicographiquement pour reproductibilité (utile pour la signature
+    /// Ed25519 côté master copy).
+    /// </summary>
+    private string WriteChecksumsFile(string targetRoot, BuildManifest manifest)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var f in manifest.Files.OrderBy(x => x.RelativePath, StringComparer.Ordinal))
+            sb.Append(f.Sha256).Append("  ").Append(f.RelativePath).Append('\n');
+        var path = _fs.CombinePath(targetRoot, "CHECKSUMS.sha256");
+        _fs.WriteAllText(path, sb.ToString());
+        return path;
+    }
 }

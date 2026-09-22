@@ -25,4 +25,20 @@
   <data name="SmokeTest"><value>Test de démarrage rapide</value></data>
   <data name="EstimationLabel"><value>Estimation</value></data>
   <data name="StatusReady"><value>Prêt.</value></data>
+  <!-- Base de connaissances (RAG) — écran optionnel entre Plateformes et SystemPrompt. -->
+  <data name="KnowledgeBaseTitle"><value>Base de connaissances (optionnel)</value></data>
+  <data name="KnowledgeBaseHint"><value>Documents .pdf/.txt/.md embarqués sous knowledge/documents/. Écran facultatif.</value></data>
+  <data name="AddKnowledgeFilesBtn"><value>Ajouter des fichiers...</value></data>
+  <data name="AddKnowledgeFolderBtn"><value>Ajouter un dossier...</value></data>
+  <data name="ClearKnowledgeBtn"><value>Tout retirer</value></data>
+  <data name="RemoveKnowledgeItemBtn"><value>Retirer</value></data>
+  <data name="KnowledgeColumnDocument"><value>Document</value></data>
+  <data name="KnowledgeColumnRelative"><value>Chemin relatif</value></data>
+  <data name="KnowledgeColumnSize"><value>Taille (o)</value></data>
+  <data name="KnowledgeReindexOnFirstLaunch"><value>Réindexer au premier démarrage</value></data>
+  <data name="KnowledgeEmptyState"><value>Aucun document sélectionné (écran optionnel).</value></data>
+  <data name="KnowledgeLargeFileWarning"><value>fichier(s) supérieur(s) à 50 Mo (non bloquant)</value></data>
+  <data name="KnowledgeAddFilesTooltip"><value>Sélection multiple .pdf/.txt/.md</value></data>
+  <data name="KnowledgeAddFolderTooltip"><value>Import récursif — structure préservée</value></data>
+  <data name="KnowledgeReindexTooltip"><value>Écrit knowledge/.reindex pour forcer la reconstruction de l'index RAG sur la clé</value></data>
 </root>

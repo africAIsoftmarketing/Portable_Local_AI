@@ -25,4 +25,20 @@
   <data name="SmokeTest"><value>Quick boot test</value></data>
   <data name="EstimationLabel"><value>Estimate</value></data>
   <data name="StatusReady"><value>Ready.</value></data>
+  <!-- Knowledge base (RAG) — optional screen between Platforms and SystemPrompt. -->
+  <data name="KnowledgeBaseTitle"><value>Knowledge Base (optional)</value></data>
+  <data name="KnowledgeBaseHint"><value>.pdf/.txt/.md documents embedded under knowledge/documents/. Optional screen.</value></data>
+  <data name="AddKnowledgeFilesBtn"><value>Add files...</value></data>
+  <data name="AddKnowledgeFolderBtn"><value>Add folder...</value></data>
+  <data name="ClearKnowledgeBtn"><value>Clear all</value></data>
+  <data name="RemoveKnowledgeItemBtn"><value>Remove</value></data>
+  <data name="KnowledgeColumnDocument"><value>Document</value></data>
+  <data name="KnowledgeColumnRelative"><value>Relative path</value></data>
+  <data name="KnowledgeColumnSize"><value>Size (B)</value></data>
+  <data name="KnowledgeReindexOnFirstLaunch"><value>Reindex on first launch</value></data>
+  <data name="KnowledgeEmptyState"><value>No document selected (optional screen).</value></data>
+  <data name="KnowledgeLargeFileWarning"><value>file(s) larger than 50 MB (non-blocking)</value></data>
+  <data name="KnowledgeAddFilesTooltip"><value>Multi-select .pdf/.txt/.md</value></data>
+  <data name="KnowledgeAddFolderTooltip"><value>Recursive import — structure preserved</value></data>
+  <data name="KnowledgeReindexTooltip"><value>Writes knowledge/.reindex to trigger RAG index rebuild on the drive</value></data>
 </root>
