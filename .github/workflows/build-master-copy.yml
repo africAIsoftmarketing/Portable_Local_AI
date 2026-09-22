@@ -116,7 +116,7 @@ jobs:
   build-win-cpu:
     name: Windows CPU (AVX2)
     needs: resolve
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       OUT_DIR: bin/windows/cpu
     steps:
@@ -155,7 +155,7 @@ jobs:
   build-win-cuda:
     name: Windows CUDA
     needs: resolve
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       OUT_DIR: bin/windows/cuda
     steps:
@@ -173,10 +173,25 @@ jobs:
           ref: ${{ needs.resolve.outputs.tag }}
           path: llama.cpp
 
-      - name: Verify CUDA installation
+      - name: Verify Visual Studio and CUDA
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe was not found; Visual Studio is not installed"
+          }
+
+          & $vswhere `
+            -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "A Visual Studio installation with MSVC was not found"
+          }
 
           if (-not $env:CUDA_PATH) {
             throw "CUDA_PATH is not set"
@@ -188,7 +203,6 @@ jobs:
           }
 
           & $nvcc --version
-          Write-Host "CUDA_PATH=$env:CUDA_PATH"
 
       - name: Configure & build (CUDA)
         shell: pwsh
@@ -228,7 +242,7 @@ jobs:
   build-win-vulkan:
     name: Windows Vulkan
     needs: resolve
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       OUT_DIR: bin/windows/vulkan
     steps:
@@ -237,7 +251,7 @@ jobs:
         with:
           vulkan-query-version: 1.3.283.0
           vulkan-components: Vulkan-Headers, Vulkan-Loader
-          vulkan-use-cache: true
+          vulkan-use-cache: false
 
       - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
         uses: actions/checkout@v4
@@ -523,9 +537,21 @@ jobs:
       OUT_DIR: bin/linux-x86_64/vulkan
     steps:
       - name: Install Vulkan SDK
+        shell: bash
         run: |
+          set -euxo pipefail
+
+          sudo add-apt-repository -y universe
           sudo apt-get update
+
+          if ! apt-cache show glslc >/dev/null 2>&1; then
+            echo "::error::The Ubuntu repository containing glslc is unavailable"
+            apt-cache policy glslc || true
+            exit 1
+          fi
+
           sudo apt-get install -y libvulkan-dev vulkan-tools glslc
+          glslc --version
 
       - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
         uses: actions/checkout@v4
@@ -579,6 +605,8 @@ jobs:
 
       - name: Configure & build (aarch64 cross)
         working-directory: llama.cpp
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
         run: |
           cmake -B build -S . \
             -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
@@ -587,7 +615,7 @@ jobs:
             -DGGML_NATIVE=OFF \
             -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release --target llama-server --parallel
+          cmake --build build --config Release --target llama-server --parallel 2
 
       - name: Collecte binaires + libs
         run: |
