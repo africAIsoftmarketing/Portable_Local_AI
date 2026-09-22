@@ -25,7 +25,7 @@ public class UsbBuildOrchestratorTests
         var m = new byte[512];
         m[0] = 0x47; m[1] = 0x47; m[2] = 0x55; m[3] = 0x46; m[4] = 3;
         fs.WriteBytes("/src/models/m.gguf", m);
-        fs.WriteBytes("/src/bin/windows-x64/llama-server.exe", new byte[64]);
+        fs.WriteBytes("/src/bin/windows/llama-server.exe", new byte[64]);
         fs.WriteAllText("/src/README.md", "# readme");
         fs.WriteAllText("/src/VERSION", "0.5.0");
         var plan = new BuildPlan

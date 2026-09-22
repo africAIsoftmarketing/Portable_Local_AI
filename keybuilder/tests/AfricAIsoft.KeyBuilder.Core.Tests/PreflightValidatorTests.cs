@@ -24,8 +24,8 @@ public class PreflightValidatorTests
         buf[0] = 0x47; buf[1] = 0x47; buf[2] = 0x55; buf[3] = 0x46;
         buf[4] = 3;
         fs.WriteBytes("/src/models/m-3b.gguf", buf);
-        // Binaires
-        fs.WriteBytes("/src/bin/windows-x64/llama.exe", new byte[100]);
+        // Binaire (nommage plateformes verrouillé — cf. PortableLayout).
+        fs.WriteBytes("/src/bin/windows/llama.exe", new byte[100]);
         var plan = new BuildPlan
         {
             SourceRoot = "/src",

@@ -22,9 +22,9 @@ public class SizeEstimatorTests
         fs.WriteAllText("/src/mcp-servers/_shared/base.py", new string('x', 500));
         fs.WriteAllText("/src/mcp-servers/accounting/server.py", new string('x', 3000));
         fs.WriteAllText("/src/mcp-servers/cybersec/server.py", new string('x', 4000));
-        // Binaires
-        fs.WriteBytes("/src/bin/windows-x64/llama-server.exe", new byte[50_000]);
-        fs.WriteBytes("/src/bin/linux-x64/llama-server",       new byte[40_000]);
+        // Binaires (nommage plateformes verrouillé — cf. PortableLayout).
+        fs.WriteBytes("/src/bin/windows/llama-server.exe",    new byte[50_000]);
+        fs.WriteBytes("/src/bin/linux-x86_64/llama-server",   new byte[40_000]);
         var plan = new BuildPlan
         {
             SourceRoot = "/src",

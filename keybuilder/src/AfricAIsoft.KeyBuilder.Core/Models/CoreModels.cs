@@ -50,11 +50,13 @@ public static class TargetPlatformExtensions
 {
     public static string ToBinaryDir(this TargetPlatform p) => p switch
     {
-        TargetPlatform.WindowsX64 => "bin/windows-x64",
-        TargetPlatform.LinuxX64   => "bin/linux-x64",
-        TargetPlatform.LinuxArm64 => "bin/linux-arm64",
-        TargetPlatform.MacOsX64   => "bin/macos-x64",
-        TargetPlatform.MacOsArm64 => "bin/macos-arm64",
+        // Nommage verrouillé, aligné sur PortableLayout.SupportedPlatforms
+        // et sur ${PLAT_KEY} résolu par scripts/core-startup.sh.
+        TargetPlatform.WindowsX64 => "bin/windows",
+        TargetPlatform.LinuxX64   => "bin/linux-x86_64",
+        TargetPlatform.LinuxArm64 => "bin/linux-aarch64",
+        TargetPlatform.MacOsX64   => "bin/darwin-x86_64",
+        TargetPlatform.MacOsArm64 => "bin/darwin-arm64",
         _ => throw new ArgumentOutOfRangeException(nameof(p)),
     };
 
