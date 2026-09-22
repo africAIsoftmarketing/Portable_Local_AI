@@ -83,13 +83,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # On prend la dernière release publiée dont le nom de tag matche bNNNN
-          # avec NNNN ≥ 5000. `gh` est pré-installé sur ubuntu-latest.
-          TAG=$(gh api "repos/${LLAMA_CPP_REPO}/releases?per_page=30" \
-                --jq '.[] | select(.prerelease==false and .draft==false) | .tag_name' \
-                | grep -E '^b[0-9]{4,}$' \
-                | awk 'BEGIN{FS="b"} { if ($2+0 >= 5000) print $0 }' \
-                | head -1)
+          # Parcourt toutes les pages de releases (--paginate --slurp) et
+          # sélectionne via jq le tag bNNNN le plus élevé (≥ b5000), sans
+          # dépendre du tri ou de la troncature à 30 résultats.
+          TAG="$(
+            gh api --paginate --slurp \
+              "repos/${LLAMA_CPP_REPO}/releases?per_page=100" |
+            jq -r '
+              [
+                .[][] |
+                select(.prerelease == false and .draft == false) |
+                select(.tag_name | test("^b[0-9]{4,}$")) |
+                select((.tag_name[1:] | tonumber) >= 5000) |
+                {
+                  tag: .tag_name,
+                  number: (.tag_name[1:] | tonumber)
+                }
+              ]
+              | if length == 0 then empty else max_by(.number).tag end
+            '
+          )"
           if [ -z "${TAG}" ]; then
             echo "::error::Aucun tag stable b5000+ trouvé pour ${LLAMA_CPP_REPO}"
             exit 1
