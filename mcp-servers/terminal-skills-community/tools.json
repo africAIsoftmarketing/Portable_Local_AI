@@ -1,0 +1,26 @@
+{
+  "skill": "terminal-skills-community",
+  "version": "1.0.0",
+  "source": {
+    "repository": "https://github.com/chaterm/terminal-skills",
+    "commit": "464c295",
+    "original_license": "Apache-2.0",
+    "original_author": "chaterm contributors",
+    "notice": "UPSTREAM_LICENSE file bundled in the skill directory."
+  },
+  "adaptation": {
+    "author": "AfricAIsoft",
+    "license": "MIT",
+    "changes": "Extracted 63 SKILL.md sheets into data/<category>/<topic>.md; wrapped as MCP stdio tools (list_topics, lookup_cheatsheet)."
+  },
+  "tools": [
+    {
+      "name": "list_topics",
+      "description": "Liste toutes les catégories et sujets terminaux disponibles offline."
+    },
+    {
+      "name": "lookup_cheatsheet",
+      "description": "Retourne le contenu markdown d'une fiche par sujet (option catégorie, filtre par mot-clé, troncature)."
+    }
+  ]
+}

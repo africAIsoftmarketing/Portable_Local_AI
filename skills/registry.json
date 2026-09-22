@@ -1,8 +1,9 @@
 {
   "skills": [
-    {"name": "cybersec",   "enabled": true, "path": "mcp-servers/cybersec"},
-    {"name": "accounting", "enabled": true, "path": "mcp-servers/accounting"},
-    {"name": "rag",        "enabled": true, "path": "mcp-servers/rag"},
-    {"name": "general",    "enabled": true, "path": "mcp-servers/general"}
+    {"name": "cybersec",                  "enabled": true, "path": "mcp-servers/cybersec"},
+    {"name": "accounting",                "enabled": true, "path": "mcp-servers/accounting"},
+    {"name": "rag",                       "enabled": true, "path": "mcp-servers/rag"},
+    {"name": "general",                   "enabled": true, "path": "mcp-servers/general"},
+    {"name": "terminal-skills-community", "enabled": true, "path": "mcp-servers/terminal-skills-community"}
   ]
 }

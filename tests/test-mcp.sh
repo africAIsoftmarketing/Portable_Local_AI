@@ -23,20 +23,20 @@ echo "=========================================================="
 echo "  test-mcp.sh"
 echo "=========================================================="
 
-# ── T1 : registre chargé, 4 skills présents ─────────────────────────────────
+# ── T1 : registre chargé, 5 skills présents ─────────────────────────────────
 info "T1 : GET ${API_PREFIX}/skills"
 BODY="$(c "${BASE_URL}${API_PREFIX}/skills")"
 echo "$BODY" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 skills = {s['name']: s for s in d['skills']}
-required = ['cybersec','accounting','rag','general']
+required = ['cybersec','accounting','rag','general','terminal-skills-community']
 missing = [s for s in required if s not in skills]
 running = [s for s, v in skills.items() if v['status']=='running']
 print('    skills:', list(skills), '| running:', running)
 assert not missing, f'skills manquants: {missing}'
 assert set(running) == set(required), f'skills non running: {set(required)-set(running)}'
-" && pass "4 skills running" || fail "skills manquants ou KO"
+" && pass "5 skills running" || fail "skills manquants ou KO"
 
 # ── T2 : cybersec.analyze_security_logs ──────────────────────────────────────
 info "T2 : cybersec.analyze_security_logs (brute-force SSH)"
@@ -165,6 +165,49 @@ info "T10 : POST /skills/unknown/invoke → 404"
 CODE="$(c -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" \
   -d '{"tool":"x"}' "${BASE_URL}${API_PREFIX}/skills/unknown/invoke")"
 [ "$CODE" = "404" ] && pass "skill inconnu = 404" || fail "skill inconnu = $CODE"
+
+# ── T11 : terminal-skills-community.list_topics ──────────────────────────────
+info "T11 : terminal-skills-community.list_topics"
+RES="$(c -X POST -H "Content-Type: application/json" \
+  -d '{"tool":"list_topics","arguments":{}}' \
+  "${BASE_URL}${API_PREFIX}/skills/terminal-skills-community/invoke")"
+echo "$RES" | python3 -c "
+import sys, json
+r = json.load(sys.stdin)['result']
+assert r['total_topics'] >= 60, f\"attendu >=60, obtenu {r['total_topics']}\"
+cats = [c['name'] for c in r['categories']]
+for expected in ('database', 'devops', 'docker', 'kubernetes', 'network', 'security'):
+    assert expected in cats, f\"catégorie {expected} absente\"
+print('    total_topics:', r['total_topics'], 'catégories:', len(cats))
+" && pass "list_topics >=60 sujets" || fail "list_topics incomplet"
+
+# ── T12 : terminal-skills-community.lookup_cheatsheet ────────────────────────
+info "T12 : terminal-skills-community.lookup_cheatsheet (topic=rsync)"
+RES="$(c -X POST -H "Content-Type: application/json" \
+  -d '{"tool":"lookup_cheatsheet","arguments":{"topic":"rsync","max_bytes":800}}' \
+  "${BASE_URL}${API_PREFIX}/skills/terminal-skills-community/invoke")"
+echo "$RES" | python3 -c "
+import sys, json
+r = json.load(sys.stdin)['result']
+assert r['found'] is True
+assert r['topic'] == 'rsync'
+assert r['category'] == 'backup'
+assert 'rsync' in r['content'].lower()
+print('    source:', r['source_path'], 'tronqué:', r['truncated'])
+" && pass "lookup_cheatsheet rsync trouvé" || fail "lookup_cheatsheet KO"
+
+# ── T13 : terminal-skills-community.lookup_cheatsheet topic inconnu ──────────
+info "T13 : terminal-skills-community.lookup_cheatsheet (topic inexistant)"
+RES="$(c -X POST -H "Content-Type: application/json" \
+  -d '{"tool":"lookup_cheatsheet","arguments":{"topic":"zzz-does-not-exist"}}' \
+  "${BASE_URL}${API_PREFIX}/skills/terminal-skills-community/invoke")"
+echo "$RES" | python3 -c "
+import sys, json
+r = json.load(sys.stdin)['result']
+assert r['found'] is False
+assert 'list_topics' in r['hint']
+print('    hint OK')
+" && pass "topic inconnu = found:false + hint" || fail "gestion topic inconnu KO"
 
 echo "----------------------------------------------------------"
 echo "  PASS=$PASS  FAIL=$FAIL"
