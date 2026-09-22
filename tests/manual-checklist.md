@@ -231,3 +231,44 @@ Version testée : `1.0.0` — commit git : ______________
 
 Seuil de validation Livrable 1 : bloc 1-9 = 100 %.
 Seuil de validation Livrable 2 : bloc 10-14 = 100 %.
+
+---
+
+## Livrable 3 — Master copy CI (GitHub Actions)
+
+### 15. Workflow `build-master-copy.yml` (`.github/workflows/`)
+
+- [ ] Pousser un tag `v1.0.0` sur `origin/main` : le workflow se déclenche automatiquement.
+- [ ] Workflow_dispatch manuel avec `version=1.0.0` : idem, produit la release.
+- [ ] Job `resolve` : sort le tag llama.cpp stable le plus récent (`bXXXX ≥ b5000`) et la version paquet.
+- [ ] 11 jobs de compilation en parallèle passent au vert : win-cpu, win-cuda, win-vulkan, mac-arm64-{metal,cpu}, mac-x86-{metal,cpu}, linux-x64-{cpu,cuda,vulkan}, linux-arm64-cpu.
+- [ ] Chaque job upload son artefact `llama-<plat>-<backend>` (dossier `bin/<plat>/<backend>/`).
+- [ ] Job `package-release` :
+  - [ ] Range chaque artefact au bon chemin `AfricAIsoft-Portable-v<VERSION>/bin/<plat>/<backend>/`.
+  - [ ] Télécharge Python 3.12 embarqué : Windows embeddable amd64 officiel + `python-build-standalone` (astral-sh) pour linux-x86_64, linux-arm64, macos-arm64, macos-x86_64.
+  - [ ] Vérifie **SHA-256** de chaque tarball PBS contre `.sha256` upstream ; échec explicite si mismatch.
+  - [ ] Pré-installe les wheels de `app/requirements.txt` dans `vendor/<plat>/` (voir bloquant ci-dessous).
+  - [ ] Exclut `config/settings.json` et `config/api_key.txt` du paquet (`settings.example.json` seul est livré).
+  - [ ] Produit `CHECKSUMS.sha256` à la racine du paquet ET à la racine de chaque archive.
+  - [ ] 4 archives ZIP : `-windows.zip`, `-macos.zip`, `-linux.zip`, `-all.zip`.
+  - [ ] Warning workflow si `-<plat>.zip > 500 Mo` ou `-all.zip > 1200 Mo`.
+  - [ ] Release GitHub créée automatiquement (`softprops/action-gh-release@v2`) avec `GITHUB_TOKEN` automatique.
+  - [ ] Corps de release extrait de `CHANGELOG.md` (section de la version publiée).
+  - [ ] `permissions: contents: write` limité à `package-release` uniquement.
+- [ ] `chmod +x` correctement appliqué sur les binaires non-Windows et sur tous les `*.sh` / `*.command` du paquet.
+
+### 16. Script `scripts/build-llama-server.sh` (reproduction locale)
+
+- [ ] `./scripts/build-llama-server.sh cpu` produit `bin/<os>-<arch>/cpu/llama-server` fonctionnel — vérifié en local sur Linux aarch64 lors de la Phase 6+ (voir `tests/RESULTS.md`).
+- [ ] `./scripts/build-llama-server.sh cuda` : message clair si `nvcc` absent, compilation OK avec CUDA Toolkit installé.
+- [ ] `./scripts/build-llama-server.sh metal` : refus explicite hors macOS, OK sur macOS.
+- [ ] `./scripts/build-llama-server.sh vulkan` : warning si `glslc` absent, compilation OK avec Vulkan SDK.
+- [ ] `./scripts/build-llama-server.sh rocm` : refus si `hipcc` absent, compilation OK avec ROCm ≥ 6.0 installé.
+
+### 17. Sanity post-release (clone frais depuis GitHub)
+
+- [ ] `git clone` du dépôt puis `unzip AfricAIsoft-Portable-v1.0.0-linux.zip` → dossier extrait exécutable directement.
+- [ ] `CHECKSUMS.sha256` : `sha256sum -c CHECKSUMS.sha256` retourne 0 erreur.
+- [ ] `./start-linux.sh` (ou macOS/Windows équivalent) démarre sans erreur, UI accessible sur `http://127.0.0.1:8080/`.
+- [ ] `python3 scripts/sign-release.py verify release.json --key config/public.pem` → `Signature OK`.
+

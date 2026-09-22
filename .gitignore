@@ -88,3 +88,7 @@ credentials.json
 # Fichier de règles filter-repo pour purge historique de secrets — ne
 # jamais commiter (contient la valeur en clair du token à redacter).
 .token-redact.txt
+
+# Logs de build llama.cpp local (script scripts/build-llama-server.sh).
+.build-*.log
+.cache/llama.cpp/
