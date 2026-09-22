@@ -1,0 +1,136 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Rôle    : compilation Windows du Key Builder (.NET 8 WPF) en un exécutable
+#           self-contained single-file téléchargeable comme artefact GitHub
+#           Actions. Aucun réseau au runtime de l'exe, aucune installation
+#           .NET requise côté opérateur, aucun GGUF embarqué.
+# Notes    :
+#   - Le brief initial mentionnait PyInstaller/Nuitka sur un projet Python
+#     `key-builder/` : erreur de spec confirmée par le client, le Key Builder
+#     reste C#/.NET WPF (dossier `keybuilder/`).
+#   - Compilation Windows uniquement (net8.0-windows + UseWPF). Le workflow
+#     `build-master-copy.yml` (portable Studio) n'est PAS touché.
+# Auteur  : AfricAIsoft — Licence : MIT
+# ─────────────────────────────────────────────────────────────────────────────
+name: build-key-builder
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "keybuilder/**"
+      - ".github/workflows/build-key-builder.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Key Builder Windows single-file
+    runs-on: windows-latest
+    env:
+      SOLUTION: keybuilder/AfricAIsoft.KeyBuilder.sln
+      WPF_PROJECT: keybuilder/src/AfricAIsoft.KeyBuilder.Wpf/AfricAIsoft.KeyBuilder.Wpf.csproj
+      CORE_TESTS: keybuilder/tests/AfricAIsoft.KeyBuilder.Core.Tests/AfricAIsoft.KeyBuilder.Core.Tests.csproj
+      # Chemin de sortie de la publication self-contained.
+      PUBLISH_DIR: keybuilder/publish
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK 8.x
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Résolution de la version paquet
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Content keybuilder/VERSION -Raw).Trim()
+          if ([string]::IsNullOrWhiteSpace($v)) {
+              Write-Error "keybuilder/VERSION vide ou introuvable."
+              exit 1
+          }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Version Key Builder : $v"
+
+      - name: Restore (Core + Wpf + Tests)
+        shell: pwsh
+        run: |
+          dotnet restore "${{ env.WPF_PROJECT }}"
+          dotnet restore "${{ env.CORE_TESTS }}"
+
+      - name: Tests xUnit Core (100 % net8.0, indépendant de Windows)
+        shell: pwsh
+        run: |
+          dotnet test "${{ env.CORE_TESTS }}" -c Release --nologo `
+            --logger "console;verbosity=minimal"
+
+      - name: Publication self-contained single-file (win-x64)
+        shell: pwsh
+        run: |
+          # Publication : Release, runtime embarqué (aucune install .NET
+          # requise côté opérateur), tout dans un unique .exe (les libs
+          # natives sont extraites au premier lancement), compression LZ.
+          dotnet publish "${{ env.WPF_PROJECT }}" `
+            -c Release -r win-x64 `
+            --self-contained true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:EnableCompressionInSingleFile=true `
+            /p:DebugType=embedded `
+            /p:PublishReadyToRun=false `
+            -o "${{ env.PUBLISH_DIR }}"
+
+      - name: Renommage de l'exe (AfricAIsoft.KeyBuilder.exe → AfricAIsoft-KeyBuilder.exe)
+        shell: pwsh
+        run: |
+          $src = Join-Path "${{ env.PUBLISH_DIR }}" "AfricAIsoft.KeyBuilder.exe"
+          $dst = Join-Path "${{ env.PUBLISH_DIR }}" "AfricAIsoft-KeyBuilder.exe"
+          if (-not (Test-Path $src)) {
+              Write-Error "Exe attendu introuvable : $src"
+              Get-ChildItem "${{ env.PUBLISH_DIR }}"
+              exit 1
+          }
+          Move-Item -Force $src $dst
+
+      - name: Garde-fou taille (< 100 Mo)
+        id: size
+        shell: pwsh
+        run: |
+          $exe = Join-Path "${{ env.PUBLISH_DIR }}" "AfricAIsoft-KeyBuilder.exe"
+          $sizeMB = [math]::Round((Get-Item $exe).Length / 1MB, 2)
+          "size_mb=$sizeMB" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Taille AfricAIsoft-KeyBuilder.exe : $sizeMB Mo"
+          if ($sizeMB -gt 100) {
+              Write-Error "L'exe dépasse la limite de 100 Mo (mesuré : $sizeMB Mo). Aborté."
+              exit 1
+          }
+
+      - name: Assemblage de l'artifact (exe + doc + settings.example)
+        shell: pwsh
+        run: |
+          $stage = "keybuilder/stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "${{ env.PUBLISH_DIR }}/AfricAIsoft-KeyBuilder.exe" $stage
+          Copy-Item "keybuilder/README-KeyBuilder.md" $stage
+          # Placeholder de logs (dossier vide livré) + config d'exemple si présente.
+          New-Item -ItemType Directory -Force -Path "$stage/logs" | Out-Null
+          Set-Content -Path "$stage/logs/.gitkeep" -Value ""
+          # Aucun secret : on n'embarque JAMAIS de settings.json opérateur.
+          if (Test-Path "keybuilder/config/settings.example.json") {
+              New-Item -ItemType Directory -Force -Path "$stage/config" | Out-Null
+              Copy-Item "keybuilder/config/settings.example.json" "$stage/config"
+          }
+          $zip = "AfricAIsoft-KeyBuilder-v${{ steps.ver.outputs.version }}-win64.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath "keybuilder/$zip" -Force
+          Get-Item "keybuilder/$zip" | Select-Object Name, Length
+
+      - name: Upload artifact (Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: AfricAIsoft-KeyBuilder-v${{ steps.ver.outputs.version }}-win64
+          path: keybuilder/AfricAIsoft-KeyBuilder-v${{ steps.ver.outputs.version }}-win64.zip
+          if-no-files-found: error
+          retention-days: 30
