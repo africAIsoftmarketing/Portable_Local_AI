@@ -415,10 +415,14 @@ jobs:
       - name: Pré-installe les wheels Python par plateforme
         # Ne JAMAIS exécuter les interpréteurs embarqués (aarch64/darwin) sur le
         # runner x86_64 Linux (Exec format error, code 126). On résout les
-        # wheels avec le python3 natif du runner via --platform/--abi ciblés.
+        # wheels avec le python3 natif du runner via --platform ciblé.
+        # Pas de --abi : pip calcule l'ensemble ABI compatible (cp312, abi3,
+        # none) — nécessaire pour les paquets à wheels abi3 comme cryptography.
         shell: bash
         run: |
           set -euo pipefail
+
+          python3 -m pip install --upgrade pip
 
           download_wheels() {
               local plat="$1"
@@ -432,8 +436,8 @@ jobs:
                 --platform "${pip_platform}" \
                 --python-version 3.12 \
                 --implementation cp \
-                --abi cp312 \
                 --only-binary=:all: \
+                --index-url https://pypi.org/simple \
                 -r app/requirements.txt
           }
 
@@ -448,17 +452,17 @@ jobs:
             "macosx_11_0_arm64"
 
           # Le python embeddable Windows n'a pas de pip ; on résout les wheels
-          # win_amd64 avec le python3 natif du runner Ubuntu.
+          # win_amd64 avec le python3 natif du runner Ubuntu. Échec = échec du
+          # job (pas de fallback) pour garantir un paquet Windows complet.
           mkdir -p "${PKG}/bin/windows/python/wheels"
           python3 -m pip download \
             --dest "${PKG}/bin/windows/python/wheels" \
             --platform win_amd64 \
             --python-version 3.12 \
             --implementation cp \
-            --abi cp312 \
             --only-binary=:all: \
-            -r app/requirements.txt || \
-            echo "::warning::Certaines wheels win_amd64 sont indisponibles."
+            --index-url https://pypi.org/simple \
+            -r app/requirements.txt
 
       - name: Génère CHECKSUMS.sha256 (racine du paquet)
         shell: bash
