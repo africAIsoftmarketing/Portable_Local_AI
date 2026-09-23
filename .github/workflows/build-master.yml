@@ -1,32 +1,24 @@
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # Rôle    : compilation matricielle de llama-server (llama.cpp) sur GitHub
 #           Actions puis assemblage de la « master copy » AfricAIsoft
-#           Portable Studio, RESTREINTE aux cibles dont le build passe au vert.
-#
-#           Cibles conservées (succès CI) :
-#             - Windows CPU (AVX2)
-#             - macOS ARM64 Metal
-#             - macOS ARM64 CPU
-#             - Linux ARM64 CPU (NEON, cross-compile)
-#
-#           Cibles RETIRÉES (échec ou non validées à ce jour) :
-#             - Windows CUDA / Windows Vulkan
-#             - macOS Intel Metal / macOS Intel CPU (non validées : en attente)
-#             - Linux x86_64 CPU / CUDA / Vulkan
-#           Elles pourront être réintégrées une fois leurs échecs corrigés.
+#           Portable Studio en 4 archives téléchargeables attachées à la
+#           release GitHub. Ajout PUR : le workflow ne modifie AUCUN fichier
+#           du dépôt. Le tag `v*` (ou le workflow_dispatch) déclenche tout.
 #
 # Notes    :
 #   - Le nommage des dossiers de destination suit STRICTEMENT le brief client :
 #     `bin/windows/<backend>`, `bin/darwin-arm64/<backend>`,
-#     `bin/linux-aarch64/<backend>`. ⚠ Les launchers existants résolvent le
-#     chemin `bin/${os}-${arch}/${backend}` avec `${os}` = uname -s minuscule
-#     (`linux`, `darwin`) et `${arch}` = `x86_64` / `aarch64` / `arm64`.
-#   - ⚠ PRÉREQUIS RUNTIME Linux ARM64 : les wheels Python sont résolues en
-#     `manylinux_2_28_aarch64` (wheel ARM64 de cryptography 43.x). Le paquet
-#     Linux ARM64 exige donc **glibc 2.28 ou plus récent** sur la machine cible.
+#     `bin/darwin-x86_64/<backend>`, `bin/linux-x86_64/<backend>`,
+#     `bin/linux-aarch64/<backend>`. ⚠ Les launchers existants (start-linux.sh,
+#     start-mac.command, start-windows.bat, scripts/core-startup.sh) résolvent
+#     eux le chemin `bin/${os}-${arch}/${backend}` avec `${os}` = uname -s en
+#     minuscules (`linux`, `darwin`) et `${arch}` = `x86_64` / `aarch64` /
+#     `arm64`. Cf. rapport bloquant §« Compat launchers vs nommage brief ».
+#   - Backend ROCm exclu (aucun runner GitHub-hosted avec toolkit). Voir
+#     `scripts/build-llama-server.sh rocm` pour la procédure locale.
 #   - GITHUB_TOKEN automatique uniquement ; aucun secret custom requis.
 # Auteur  : AfricAIsoft — Licence : MIT
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 name: build-master-copy
 
 on:
@@ -40,14 +32,23 @@ on:
         required: false
         default: ""
 
+# Politique de permissions : lecture par défaut, écriture uniquement sur le
+# job final `package-release` (création de release + upload d'assets).
 permissions:
   contents: read
 
 env:
   LLAMA_CPP_REPO: "ggml-org/llama.cpp"
+  # Version épinglée de python-build-standalone (astral-sh) — évite tout
+  # « latest » volatile. À bumper explicitement quand nécessaire.
   PBS_TAG: "20240814"
+  # Version du Python embarqué (Windows embeddable + python-build-standalone).
   PYTHON_VERSION: "3.12.5"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Job utilitaire : résolution du tag llama.cpp stable le plus récent (bXXXX).
+# Sortie exposée à tous les jobs de build via `needs.resolve.outputs.tag`.
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
   resolve:
     name: Résolution tag llama.cpp
@@ -58,12 +59,14 @@ jobs:
     steps:
       - name: Checkout (lecture VERSION)
         uses: actions/checkout@v4
+
       - id: ver
         name: Résolution version paquet
         shell: bash
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.ref_name }}" ]; then
+            # Déclencheur tag : le tag prime.
             V="${GITHUB_REF_NAME#v}"
           elif [ -n "${{ inputs.version }}" ]; then
             V="${{ inputs.version }}"
@@ -72,6 +75,7 @@ jobs:
           fi
           echo "version=${V}" >> "$GITHUB_OUTPUT"
           echo "Version paquet : ${V}"
+
       - id: pick
         name: Résolution dernier tag stable llama.cpp (bXXXX ≥ b5000)
         shell: bash
@@ -79,7 +83,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG="$(gh api --paginate --slurp "repos/${LLAMA_CPP_REPO}/releases?per_page=100" | jq -r '[.[][] | select(.prerelease == false and .draft == false) | select(.tag_name | test("^b[0-9]{4,}$")) | select((.tag_name[1:] | tonumber) >= 5000) | {tag: .tag_name, number: (.tag_name[1:] | tonumber)}] | if length == 0 then empty else max_by(.number).tag end')"
+          # Parcourt toutes les pages de releases (--paginate --slurp) et
+          # sélectionne via jq le tag bNNNN le plus élevé (≥ b5000), sans
+          # dépendre du tri ou de la troncature à 30 résultats.
+          TAG="$(
+            gh api --paginate --slurp \
+              "repos/${LLAMA_CPP_REPO}/releases?per_page=100" |
+            jq -r '
+              [
+                .[][] |
+                select(.prerelease == false and .draft == false) |
+                select(.tag_name | test("^b[0-9]{4,}$")) |
+                select((.tag_name[1:] | tonumber) >= 5000) |
+                {
+                  tag: .tag_name,
+                  number: (.tag_name[1:] | tonumber)
+                }
+              ]
+              | if length == 0 then empty else max_by(.number).tag end
+            '
+          )"
           if [ -z "${TAG}" ]; then
             echo "::error::Aucun tag stable b5000+ trouvé pour ${LLAMA_CPP_REPO}"
             exit 1
@@ -87,6 +110,9 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "llama.cpp tag retenu : ${TAG}"
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # Compilation Windows
+  # ───────────────────────────────────────────────────────────────────────────
   build-win-cpu:
     name: Windows CPU (AVX2)
     needs: resolve
@@ -100,6 +126,7 @@ jobs:
           repository: ${{ env.LLAMA_CPP_REPO }}
           ref: ${{ needs.resolve.outputs.tag }}
           path: llama.cpp
+
       - name: Configure & build (CPU AVX2)
         shell: pwsh
         working-directory: llama.cpp
@@ -109,6 +136,7 @@ jobs:
             -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON `
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel
+
       - name: Collecte binaires + DLLs
         shell: pwsh
         run: |
@@ -116,6 +144,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item llama.cpp/build/bin/Release/llama-server.exe $out
           Get-ChildItem llama.cpp/build/bin/Release/*.dll | Copy-Item -Destination $out
+
       - uses: actions/upload-artifact@v4
         with:
           name: llama-windows-cpu
@@ -123,6 +152,142 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  build-win-cuda:
+    name: Windows CUDA
+    needs: resolve
+    runs-on: windows-2022
+    env:
+      OUT_DIR: bin/windows/cuda
+    steps:
+      - name: Install CUDA Toolkit 12.4
+        uses: Jimver/cuda-toolkit@v0.2.18
+        with:
+          cuda: "12.4.1"
+          sub-packages: '["nvcc","cudart","cublas","cublas_dev","curand","curand_dev"]'
+          method: "network"
+
+      - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LLAMA_CPP_REPO }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: llama.cpp
+
+      - name: Verify Visual Studio and CUDA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe was not found; Visual Studio is not installed"
+          }
+
+          & $vswhere `
+            -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "A Visual Studio installation with MSVC was not found"
+          }
+
+          if (-not $env:CUDA_PATH) {
+            throw "CUDA_PATH is not set"
+          }
+
+          $nvcc = Join-Path $env:CUDA_PATH "bin\nvcc.exe"
+          if (-not (Test-Path $nvcc)) {
+            throw "nvcc was not found at $nvcc"
+          }
+
+          & $nvcc --version
+
+      - name: Configure & build (CUDA)
+        shell: pwsh
+        working-directory: llama.cpp
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          cmake -B build -S . `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DGGML_CUDA=ON `
+            -DCMAKE_CUDA_COMPILER="$env:CUDA_PATH\bin\nvcc.exe" `
+            -DLLAMA_CURL=OFF `
+            -DBUILD_SHARED_LIBS=ON `
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build build `
+            --config Release `
+            --target llama-server `
+            --parallel
+
+      - name: Collecte binaires + DLLs
+        shell: pwsh
+        run: |
+          $out = "${{ env.OUT_DIR }}"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item llama.cpp/build/bin/Release/llama-server.exe $out
+          Get-ChildItem llama.cpp/build/bin/Release/*.dll | Copy-Item -Destination $out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-windows-cuda
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+  build-win-vulkan:
+    name: Windows Vulkan
+    needs: resolve
+    runs-on: windows-2022
+    env:
+      OUT_DIR: bin/windows/vulkan
+    steps:
+      - name: Install Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.0
+        with:
+          vulkan-query-version: 1.3.283.0
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: false
+
+      - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LLAMA_CPP_REPO }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: llama.cpp
+
+      - name: Configure & build (Vulkan)
+        shell: pwsh
+        working-directory: llama.cpp
+        run: |
+          cmake -B build -S . `
+            -DGGML_VULKAN=ON `
+            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON `
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target llama-server --parallel
+
+      - name: Collecte binaires + DLLs
+        shell: pwsh
+        run: |
+          $out = "${{ env.OUT_DIR }}"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item llama.cpp/build/bin/Release/llama-server.exe $out
+          Get-ChildItem llama.cpp/build/bin/Release/*.dll | Copy-Item -Destination $out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-windows-vulkan
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Compilation macOS (Apple Silicon + Intel)
+  # ───────────────────────────────────────────────────────────────────────────
   build-darwin-arm64-metal:
     name: macOS ARM64 Metal
     needs: resolve
@@ -136,6 +301,7 @@ jobs:
           repository: ${{ env.LLAMA_CPP_REPO }}
           ref: ${{ needs.resolve.outputs.tag }}
           path: llama.cpp
+
       - name: Configure & build (Metal)
         working-directory: llama.cpp
         run: |
@@ -144,6 +310,7 @@ jobs:
             -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel
+
       - name: Collecte binaires + dylibs
         run: |
           mkdir -p "${OUT_DIR}"
@@ -151,6 +318,7 @@ jobs:
           cp llama.cpp/build/bin/*.dylib "${OUT_DIR}/" 2>/dev/null || true
           cp llama.cpp/build/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
           cp llama.cpp/build/ggml/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: llama-darwin-arm64-metal
@@ -171,6 +339,7 @@ jobs:
           repository: ${{ env.LLAMA_CPP_REPO }}
           ref: ${{ needs.resolve.outputs.tag }}
           path: llama.cpp
+
       - name: Configure & build (CPU NEON)
         working-directory: llama.cpp
         run: |
@@ -179,6 +348,7 @@ jobs:
             -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel
+
       - name: Collecte binaires + dylibs
         run: |
           mkdir -p "${OUT_DIR}"
@@ -186,9 +356,230 @@ jobs:
           cp llama.cpp/build/bin/*.dylib "${OUT_DIR}/" 2>/dev/null || true
           cp llama.cpp/build/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
           cp llama.cpp/build/ggml/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: llama-darwin-arm64-cpu
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+  build-darwin-x86_64-metal:
+    name: macOS Intel Metal
+    needs: resolve
+    runs-on: macos-13
+    env:
+      OUT_DIR: bin/darwin-x86_64/metal
+    steps:
+      - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LLAMA_CPP_REPO }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: llama.cpp
+
+      - name: Configure & build (Metal x86_64)
+        working-directory: llama.cpp
+        run: |
+          cmake -B build -S . \
+            -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON \
+            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target llama-server --parallel
+
+      - name: Collecte binaires + dylibs
+        run: |
+          mkdir -p "${OUT_DIR}"
+          cp llama.cpp/build/bin/llama-server "${OUT_DIR}/"
+          cp llama.cpp/build/bin/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+          cp llama.cpp/build/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+          cp llama.cpp/build/ggml/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-darwin-x86_64-metal
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+  build-darwin-x86_64-cpu:
+    name: macOS Intel CPU (AVX2)
+    needs: resolve
+    runs-on: macos-13
+    env:
+      OUT_DIR: bin/darwin-x86_64/cpu
+    steps:
+      - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LLAMA_CPP_REPO }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: llama.cpp
+
+      - name: Configure & build (CPU AVX2 x86_64)
+        working-directory: llama.cpp
+        run: |
+          cmake -B build -S . \
+            -DGGML_METAL=OFF -DGGML_ACCELERATE=OFF \
+            -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_AVX=ON \
+            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target llama-server --parallel
+
+      - name: Collecte binaires + dylibs
+        run: |
+          mkdir -p "${OUT_DIR}"
+          cp llama.cpp/build/bin/llama-server "${OUT_DIR}/"
+          cp llama.cpp/build/bin/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+          cp llama.cpp/build/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+          cp llama.cpp/build/ggml/src/*.dylib "${OUT_DIR}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-darwin-x86_64-cpu
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Compilation Linux
+  # ───────────────────────────────────────────────────────────────────────────
+  build-linux-x64-cpu:
+    name: Linux x86_64 CPU (AVX2, glibc 2.35)
+    needs: resolve
+    # Ubuntu 22.04 = glibc 2.35. Compatible avec Debian 12 (glibc 2.36) et
+    # ultérieurs. Pour Debian 11 (glibc 2.31), voir scripts/build-llama-server.sh
+    # ou compilation Docker manylinux.
+    runs-on: ubuntu-22.04
+    env:
+      OUT_DIR: bin/linux-x86_64/cpu
+    steps:
+      - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LLAMA_CPP_REPO }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: llama.cpp
+
+      - name: Configure & build (CPU AVX2)
+        working-directory: llama.cpp
+        run: |
+          cmake -B build -S . \
+            -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_AVX=ON \
+            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target llama-server --parallel
+
+      - name: Collecte binaires + libs
+        run: |
+          mkdir -p "${OUT_DIR}"
+          cp llama.cpp/build/bin/llama-server "${OUT_DIR}/"
+          cp -a llama.cpp/build/bin/*.so* "${OUT_DIR}/" 2>/dev/null || true
+          cp -a llama.cpp/build/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
+          cp -a llama.cpp/build/ggml/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-linux-x86_64-cpu
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+  build-linux-x64-cuda:
+    name: Linux x86_64 CUDA
+    needs: resolve
+    runs-on: ubuntu-22.04
+    env:
+      OUT_DIR: bin/linux-x86_64/cuda
+    steps:
+      - name: Install CUDA Toolkit 12.4
+        uses: Jimver/cuda-toolkit@v0.2.18
+        with:
+          cuda: "12.4.1"
+          method: "network"
+
+      - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LLAMA_CPP_REPO }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: llama.cpp
+
+      - name: Configure & build (CUDA)
+        working-directory: llama.cpp
+        run: |
+          cmake -B build -S . \
+            -DGGML_CUDA=ON \
+            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target llama-server --parallel
+
+      - name: Collecte binaires + libs
+        run: |
+          mkdir -p "${OUT_DIR}"
+          cp llama.cpp/build/bin/llama-server "${OUT_DIR}/"
+          cp -a llama.cpp/build/bin/*.so* "${OUT_DIR}/" 2>/dev/null || true
+          cp -a llama.cpp/build/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
+          cp -a llama.cpp/build/ggml/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-linux-x86_64-cuda
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+  build-linux-x64-vulkan:
+    name: Linux x86_64 Vulkan
+    needs: resolve
+    runs-on: ubuntu-22.04
+    env:
+      OUT_DIR: bin/linux-x86_64/vulkan
+    steps:
+      - name: Install Vulkan SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          sudo add-apt-repository -y universe
+          sudo apt-get update
+
+          if ! apt-cache show glslc >/dev/null 2>&1; then
+            echo "::error::The Ubuntu repository containing glslc is unavailable"
+            apt-cache policy glslc || true
+            exit 1
+          fi
+
+          sudo apt-get install -y libvulkan-dev vulkan-tools glslc
+          glslc --version
+
+      - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LLAMA_CPP_REPO }}
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: llama.cpp
+
+      - name: Configure & build (Vulkan)
+        working-directory: llama.cpp
+        run: |
+          cmake -B build -S . \
+            -DGGML_VULKAN=ON \
+            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target llama-server --parallel
+
+      - name: Collecte binaires + libs
+        run: |
+          mkdir -p "${OUT_DIR}"
+          cp llama.cpp/build/bin/llama-server "${OUT_DIR}/"
+          cp -a llama.cpp/build/bin/*.so* "${OUT_DIR}/" 2>/dev/null || true
+          cp -a llama.cpp/build/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
+          cp -a llama.cpp/build/ggml/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-linux-x86_64-vulkan
           path: ${{ env.OUT_DIR }}
           if-no-files-found: error
           retention-days: 7
@@ -204,12 +595,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
       - name: Checkout llama.cpp @${{ needs.resolve.outputs.tag }}
         uses: actions/checkout@v4
         with:
           repository: ${{ env.LLAMA_CPP_REPO }}
           ref: ${{ needs.resolve.outputs.tag }}
           path: llama.cpp
+
       - name: Configure & build (aarch64 cross)
         working-directory: llama.cpp
         env:
@@ -223,6 +616,7 @@ jobs:
             -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel 2
+
       - name: Collecte binaires + libs
         run: |
           mkdir -p "${OUT_DIR}"
@@ -230,6 +624,7 @@ jobs:
           cp -a llama.cpp/build/bin/*.so* "${OUT_DIR}/" 2>/dev/null || true
           cp -a llama.cpp/build/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
           cp -a llama.cpp/build/ggml/src/*.so* "${OUT_DIR}/" 2>/dev/null || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: llama-linux-aarch64-cpu
@@ -237,15 +632,26 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # Job final : assemblage, checksums, archives, release GitHub
+  # ───────────────────────────────────────────────────────────────────────────
   package-release:
     name: Assemblage + release GitHub
     needs:
       - resolve
       - build-win-cpu
+      - build-win-cuda
+      - build-win-vulkan
       - build-darwin-arm64-metal
       - build-darwin-arm64-cpu
+      - build-darwin-x86_64-metal
+      - build-darwin-x86_64-cpu
+      - build-linux-x64-cpu
+      - build-linux-x64-cuda
+      - build-linux-x64-vulkan
       - build-linux-aarch64-cpu
     runs-on: ubuntu-22.04
+    # Permissions élevées limitées à ce job (création de release + upload).
     permissions:
       contents: write
     env:
@@ -253,39 +659,79 @@ jobs:
     steps:
       - name: Checkout du dépôt (tag/ref déclencheur)
         uses: actions/checkout@v4
+
       - name: Prépare l'arborescence portable AfricAIsoft-Portable-v${{ env.VERSION }}
         shell: bash
         run: |
           set -euo pipefail
           PKG="AfricAIsoft-Portable-v${VERSION}"
           mkdir -p "${PKG}"
-          for item in app config mcp-servers skills scripts ui tests docs start-linux.sh start-mac.command start-windows.bat stop-linux.sh stop-mac.sh install.sh install.bat start.sh start.bat README.md CHANGELOG.md LICENSE VERSION release.json release.json.sig; do
-            if [ -e "${item}" ]; then cp -a "${item}" "${PKG}/"; fi
+          # Copie fichiers/dossiers PRODUIT (aucune modification).
+          # models/ ne contient que .gitkeep — aucun GGUF distribué.
+          for item in \
+              app config mcp-servers skills scripts ui tests docs \
+              start-linux.sh start-mac.command start-windows.bat \
+              stop-linux.sh stop-mac.sh \
+              install.sh install.bat start.sh start.bat \
+              README.md CHANGELOG.md LICENSE VERSION release.json release.json.sig
+          do
+              if [ -e "${item}" ]; then
+                  cp -a "${item}" "${PKG}/"
+              fi
           done
+          # Dossiers runtime vides + placeholder pour models/.
           mkdir -p "${PKG}/data/pids" "${PKG}/logs" "${PKG}/models"
           [ -f data/pids/.gitkeep ] && cp data/pids/.gitkeep "${PKG}/data/pids/" || :
-          touch "${PKG}/logs/.gitkeep" "${PKG}/models/.gitkeep"
+          touch "${PKG}/logs/.gitkeep"
+          touch "${PKG}/models/.gitkeep"
+          # config/ : jamais settings.json (secrets utilisateur potentiels).
           rm -f "${PKG}/config/settings.json" "${PKG}/config/api_key.txt"
+          # Vérif : settings.example.json présent (l'orchestrateur copie au 1er lancement).
           if [ ! -f "${PKG}/config/settings.example.json" ]; then
-            echo "::error::config/settings.example.json manquant dans le paquet."
-            exit 1
+              echo "::error::config/settings.example.json manquant dans le paquet."
+              exit 1
           fi
           echo "PKG=${PKG}" >> "$GITHUB_ENV"
+
       - name: Télécharge tous les artifacts binaires (bin/)
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          # Aucun `name` → télécharge tous les artifacts de ce workflow.
+
       - name: Range les binaires aux bons chemins bin/<plat>/<backend>/
         shell: bash
         run: |
           set -euo pipefail
-          declare -A MAP=([llama-windows-cpu]="${PKG}/bin/windows/cpu" [llama-darwin-arm64-metal]="${PKG}/bin/darwin-arm64/metal" [llama-darwin-arm64-cpu]="${PKG}/bin/darwin-arm64/cpu" [llama-linux-aarch64-cpu]="${PKG}/bin/linux-aarch64/cpu")
+          declare -A MAP=(
+            [llama-windows-cpu]="${PKG}/bin/windows/cpu"
+            [llama-windows-cuda]="${PKG}/bin/windows/cuda"
+            [llama-windows-vulkan]="${PKG}/bin/windows/vulkan"
+            [llama-darwin-arm64-metal]="${PKG}/bin/darwin-arm64/metal"
+            [llama-darwin-arm64-cpu]="${PKG}/bin/darwin-arm64/cpu"
+            [llama-darwin-x86_64-metal]="${PKG}/bin/darwin-x86_64/metal"
+            [llama-darwin-x86_64-cpu]="${PKG}/bin/darwin-x86_64/cpu"
+            [llama-linux-x86_64-cpu]="${PKG}/bin/linux-x86_64/cpu"
+            [llama-linux-x86_64-cuda]="${PKG}/bin/linux-x86_64/cuda"
+            [llama-linux-x86_64-vulkan]="${PKG}/bin/linux-x86_64/vulkan"
+            [llama-linux-aarch64-cpu]="${PKG}/bin/linux-aarch64/cpu"
+          )
           for name in "${!MAP[@]}"; do
-            src="artifacts/${name}"; dst="${MAP[$name]}"; mkdir -p "${dst}"
-            if [ -d "${src}" ]; then cp -a "${src}/." "${dst}/"; else echo "::warning::Artifact ${name} manquant"; fi
+              src="artifacts/${name}"
+              dst="${MAP[$name]}"
+              mkdir -p "${dst}"
+              if [ -d "${src}" ]; then
+                  cp -a "${src}/." "${dst}/"
+              else
+                  echo "::warning::Artifact ${name} manquant"
+              fi
           done
-          find "${PKG}/bin/linux-aarch64" "${PKG}/bin/darwin-arm64" -type f ! -name "*.so*" ! -name "*.dylib" -exec chmod +x {} + 2>/dev/null || true
+          # chmod +x sur binaires non-Windows + scripts shell.
+          find "${PKG}/bin/linux-x86_64" "${PKG}/bin/linux-aarch64" \
+               "${PKG}/bin/darwin-arm64" "${PKG}/bin/darwin-x86_64" \
+               -type f ! -name "*.so*" ! -name "*.dylib" -exec chmod +x {} + 2>/dev/null || true
           find "${PKG}" -maxdepth 2 -type f \( -name "*.sh" -o -name "*.command" \) -exec chmod +x {} +
+
       - name: Télécharge Python 3.12 embarqué + wheels par plateforme
         shell: bash
         env:
@@ -294,76 +740,174 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/py
+          # ── Windows embeddable (officiel python.org).
           curl -fSL "${WIN_EMBED_URL}" -o /tmp/py/win.zip
           mkdir -p "${PKG}/bin/windows/python"
           unzip -q /tmp/py/win.zip -d "${PKG}/bin/windows/python"
-          declare -A PBS=([linux-aarch64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-unknown-linux-gnu-install_only.tar.gz" [darwin-arm64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-apple-darwin-install_only.tar.gz")
+
+          # ── python-build-standalone (astral-sh) : linux-x64, linux-aarch64,
+          #    darwin-arm64, darwin-x86_64. Version PBS épinglée via env.PBS_TAG.
+          # Note : le nom des assets suit le format
+          #   cpython-3.12.5+20240814-<triple>-install_only.tar.gz
+          declare -A PBS=(
+            [linux-x86_64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-x86_64-unknown-linux-gnu-install_only.tar.gz"
+            [linux-aarch64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-unknown-linux-gnu-install_only.tar.gz"
+            [darwin-arm64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-aarch64-apple-darwin-install_only.tar.gz"
+            [darwin-x86_64]="cpython-${PYTHON_VERSION}+${PBS_TAG}-x86_64-apple-darwin-install_only.tar.gz"
+          )
           for plat in "${!PBS[@]}"; do
-            asset="${PBS[$plat]}"; url="${PBS_URL_BASE}/${asset}"
-            curl -fSL "${url}" -o "/tmp/py/${plat}.tar.gz"
-            curl -fSL "${url}.sha256" -o "/tmp/py/${plat}.sha256" || { echo "::error::Empreinte SHA-256 upstream indisponible pour ${asset}."; exit 1; }
-            expected="$(awk '{print $1}' "/tmp/py/${plat}.sha256")"; actual="$(sha256sum "/tmp/py/${plat}.tar.gz" | awk '{print $1}')"
-            if [ "${expected}" != "${actual}" ]; then echo "::error::SHA-256 mismatch pour ${asset}. attendu=${expected} obtenu=${actual}"; exit 1; fi
-            mkdir -p "${PKG}/bin/${plat}/python"
-            tar -C "${PKG}/bin/${plat}/python" --strip-components=1 -xzf "/tmp/py/${plat}.tar.gz"
+              asset="${PBS[$plat]}"
+              url="${PBS_URL_BASE}/${asset}"
+              curl -fSL "${url}" -o "/tmp/py/${plat}.tar.gz"
+              # Vérif SHA-256 depuis le fichier .sha256 upstream (source de vérité).
+              curl -fSL "${url}.sha256" -o "/tmp/py/${plat}.sha256" || {
+                  echo "::error::Empreinte SHA-256 upstream indisponible pour ${asset}."
+                  exit 1
+              }
+              expected="$(awk '{print $1}' /tmp/py/${plat}.sha256)"
+              actual="$(sha256sum /tmp/py/${plat}.tar.gz | awk '{print $1}')"
+              if [ "${expected}" != "${actual}" ]; then
+                  echo "::error::SHA-256 mismatch pour ${asset}. attendu=${expected} obtenu=${actual}"
+                  exit 1
+              fi
+              mkdir -p "${PKG}/bin/${plat}/python"
+              tar -C "${PKG}/bin/${plat}/python" --strip-components=1 -xzf "/tmp/py/${plat}.tar.gz"
           done
+
       - name: Pré-installe les wheels Python par plateforme
+        # Ne JAMAIS exécuter les interpréteurs embarqués (aarch64/darwin) sur le
+        # runner x86_64 Linux (Exec format error). On résout les wheels avec le
+        # python3 natif du runner via --platform ciblé. Les --abi explicites
+        # (cp312, abi3, none) sont nécessaires pour les paquets comme
+        # cryptography qui publient des wheels abi3.
         shell: bash
         run: |
           set -euo pipefail
+
           python3 -m pip install --upgrade pip
+
           download_wheels() {
-            local plat="$1"; local pip_platform="$2"; local wheels_dir="${PKG}/bin/${plat}/python/wheels"
-            mkdir -p "${wheels_dir}"
-            python3 -m pip download --dest "${wheels_dir}" --platform "${pip_platform}" --python-version 3.12 --implementation cp --abi cp312 --abi abi3 --abi none --only-binary=:all: --index-url https://pypi.org/simple -r app/requirements.txt
+              local plat="$1"
+              local pip_platform="$2"
+              local wheels_dir="${PKG}/bin/${plat}/python/wheels"
+
+              mkdir -p "${wheels_dir}"
+
+              python3 -m pip download \
+                --dest "${wheels_dir}" \
+                --platform "${pip_platform}" \
+                --python-version 3.12 \
+                --implementation cp \
+                --abi cp312 \
+                --abi abi3 \
+                --abi none \
+                --only-binary=:all: \
+                --index-url https://pypi.org/simple \
+                -r app/requirements.txt
           }
-          # Linux ARM64 : manylinux_2_28 (glibc >= 2.28). La wheel ARM64 de
-          # cryptography 43.x n'existe PAS en manylinux_2_17 -> échec de
-          # résolution avec --only-binary. Prérequis runtime : glibc >= 2.28.
-          download_wheels "linux-aarch64" "manylinux_2_28_aarch64"
-          download_wheels "darwin-arm64" "macosx_11_0_arm64"
+
+          download_wheels "linux-x86_64"   "manylinux_2_28_x86_64"
+          download_wheels "linux-aarch64"   "manylinux_2_28_aarch64"
+          download_wheels "darwin-arm64"    "macosx_11_0_arm64"
+          download_wheels "darwin-x86_64"   "macosx_11_0_x86_64"
+
+          # Le python embeddable Windows n'a pas de pip ; on résout les wheels
+          # win_amd64 avec le python3 natif du runner Ubuntu.
           mkdir -p "${PKG}/bin/windows/python/wheels"
-          python3 -m pip download --dest "${PKG}/bin/windows/python/wheels" --platform win_amd64 --python-version 3.12 --implementation cp --abi cp312 --abi abi3 --abi none --only-binary=:all: --index-url https://pypi.org/simple -r app/requirements.txt
+          python3 -m pip download \
+            --dest "${PKG}/bin/windows/python/wheels" \
+            --platform win_amd64 \
+            --python-version 3.12 \
+            --implementation cp \
+            --abi cp312 \
+            --abi abi3 \
+            --abi none \
+            --only-binary=:all: \
+            --index-url https://pypi.org/simple \
+            -r app/requirements.txt
+
       - name: Génère CHECKSUMS.sha256 (racine du paquet)
         shell: bash
         run: |
           set -euo pipefail
-          ( cd "${PKG}" && find . -type f ! -name "CHECKSUMS.sha256" -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > CHECKSUMS.sha256 )
+          ( cd "${PKG}" && find . -type f ! -name "CHECKSUMS.sha256" -print0 \
+               | LC_ALL=C sort -z \
+               | xargs -0 sha256sum > CHECKSUMS.sha256 )
           wc -l "${PKG}/CHECKSUMS.sha256"
-      - name: Construit les archives (.zip)
+
+      - name: Construit les 4 archives (.zip)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
           BASE="AfricAIsoft-Portable-v${VERSION}"
+
           make_zip() {
-            local name="$1"; shift; local -a includes=("$@"); local staging="staging-${name}"
-            rm -rf "${staging}"; mkdir -p "${staging}/${BASE}"
-            cp -a "${PKG}"/*.md "${PKG}/LICENSE" "${PKG}/VERSION" "${staging}/${BASE}/" 2>/dev/null || true
-            for item in app config mcp-servers skills scripts ui tests docs data logs models start-linux.sh start-mac.command start-windows.bat stop-linux.sh stop-mac.sh install.sh install.bat start.sh start.bat release.json release.json.sig; do
-              if [ -e "${PKG}/${item}" ]; then cp -a "${PKG}/${item}" "${staging}/${BASE}/"; fi
-            done
-            mkdir -p "${staging}/${BASE}/bin"
-            for inc in "${includes[@]}"; do if [ -d "${PKG}/bin/${inc}" ]; then cp -a "${PKG}/bin/${inc}" "${staging}/${BASE}/bin/"; fi; done
-            ( cd "${staging}/${BASE}" && find . -type f ! -name "CHECKSUMS.sha256" -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > CHECKSUMS.sha256 )
-            ( cd "${staging}" && zip -qr "../dist/${BASE}-${name}.zip" "${BASE}" )
-            rm -rf "${staging}"
-            local sz; sz=$(du -m "dist/${BASE}-${name}.zip" | awk '{print $1}'); echo "→ ${BASE}-${name}.zip : ${sz} Mo"
-            if [ "${name}" = "all" ] && [ "${sz}" -gt 1200 ]; then echo "::warning::${BASE}-${name}.zip = ${sz} Mo > 1200 Mo (cible)."; elif [ "${name}" != "all" ] && [ "${sz}" -gt 500 ]; then echo "::warning::${BASE}-${name}.zip = ${sz} Mo > 500 Mo (cible)."; fi
+              local name="$1"; shift
+              local -a includes=("$@")
+              local staging="staging-${name}"
+              rm -rf "${staging}"
+              mkdir -p "${staging}/${BASE}"
+              # Copie SÉLECTIVE du contenu produit (hors bin/).
+              cp -a "${PKG}"/*.md "${PKG}/LICENSE" "${PKG}/VERSION" "${staging}/${BASE}/" 2>/dev/null || true
+              for item in app config mcp-servers skills scripts ui tests docs data logs models \
+                          start-linux.sh start-mac.command start-windows.bat \
+                          stop-linux.sh stop-mac.sh \
+                          install.sh install.bat start.sh start.bat \
+                          release.json release.json.sig; do
+                  if [ -e "${PKG}/${item}" ]; then
+                      cp -a "${PKG}/${item}" "${staging}/${BASE}/"
+                  fi
+              done
+              mkdir -p "${staging}/${BASE}/bin"
+              for inc in "${includes[@]}"; do
+                  if [ -d "${PKG}/bin/${inc}" ]; then
+                      cp -a "${PKG}/bin/${inc}" "${staging}/${BASE}/bin/"
+                  fi
+              done
+              ( cd "${staging}/${BASE}" && find . -type f ! -name "CHECKSUMS.sha256" -print0 \
+                    | LC_ALL=C sort -z \
+                    | xargs -0 sha256sum > CHECKSUMS.sha256 )
+              ( cd "${staging}" && zip -qr "../dist/${BASE}-${name}.zip" "${BASE}" )
+              rm -rf "${staging}"
+              local sz
+              sz=$(du -m "dist/${BASE}-${name}.zip" | awk '{print $1}')
+              echo "→ ${BASE}-${name}.zip : ${sz} Mo"
+              # Warnings tailles (500 Mo cible ; 1200 Mo cible all).
+              if [ "${name}" = "all" ] && [ "${sz}" -gt 1200 ]; then
+                  echo "::warning::${BASE}-${name}.zip = ${sz} Mo > 1200 Mo (cible)."
+              elif [ "${name}" != "all" ] && [ "${sz}" -gt 500 ]; then
+                  echo "::warning::${BASE}-${name}.zip = ${sz} Mo > 500 Mo (cible)."
+              fi
           }
-          make_zip "windows" windows; make_zip "darwin" darwin-arm64; make_zip "linux" linux-aarch64; make_zip "all" windows darwin-arm64 linux-aarch64
+
+          make_zip "windows" windows
+          make_zip "darwin"  darwin-arm64 darwin-x86_64
+          make_zip "linux"   linux-x86_64 linux-aarch64
+          make_zip "all"     windows darwin-arm64 darwin-x86_64 linux-x86_64 linux-aarch64
+
           ls -la dist/
+
       - name: Extrait la section CHANGELOG de la version en cours
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY' > /tmp/release-notes.md
-          import re, os
-          v = os.environ["VERSION"]; txt = open("CHANGELOG.md", encoding="utf-8").read()
-          m = re.search(rf"^##\s*\[{re.escape(v)}\][^\n]*\n(.*?)(?=^##\s*\[|\Z)", txt, flags=re.M | re.S)
-          print(m.group(0).rstrip() if m else f"# AfricAIsoft Portable Studio v{v}\n\nSection CHANGELOG.md correspondante introuvable ; voir le fichier CHANGELOG.md dans l'archive.")
+          import re, os, sys
+          v = os.environ["VERSION"]
+          txt = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(
+              rf"^##\s*\[{re.escape(v)}\][^\n]*\n(.*?)(?=^##\s*\[|\Z)",
+              txt, flags=re.M | re.S)
+          if m:
+              print(m.group(0).rstrip())
+          else:
+              print(f"# AfricAIsoft Portable Studio v{v}\n\n"
+                    "Section CHANGELOG.md correspondante introuvable ; "
+                    "voir le fichier CHANGELOG.md dans l'archive.")
           PY
           head -20 /tmp/release-notes.md
+
       - name: Crée la release GitHub + upload assets
         uses: softprops/action-gh-release@v2
         with:
