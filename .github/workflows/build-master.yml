@@ -21,9 +21,10 @@
 #     `bin/linux-aarch64/<backend>`. ⚠ Les launchers existants résolvent le
 #     chemin `bin/${os}-${arch}/${backend}` avec `${os}` = uname -s minuscule
 #     (`linux`, `darwin`) et `${arch}` = `x86_64` / `aarch64` / `arm64`.
-#   - ⚠ PRÉREQUIS RUNTIME Linux ARM64 : les wheels Python sont résolues en
-#     `manylinux_2_28_aarch64` (wheel ARM64 de cryptography 43.x). Le paquet
-#     Linux ARM64 exige donc **glibc 2.28 ou plus récent** sur la machine cible.
+#   - Wheels Python Linux ARM64 résolues en `manylinux_2_17_aarch64`
+#     (glibc ≥ 2.17). ⚠ Passer UN tag par --platform : la forme fusionnée
+#     `manylinux_2_17_aarch64.manylinux2014_aarch64` (nom de fichier wheel)
+#     n'est reconnue par pip comme aucun tag → « from versions: none ».
 #   - GITHUB_TOKEN automatique uniquement ; aucun secret custom requis.
 # Auteur  : AfricAIsoft — Licence : MIT
 # ──────────────────────────────────────────────────────────────────────────────
@@ -237,6 +238,45 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # Wheels Python Windows — résolues NATIVEMENT sur Windows : pip évalue les
+  # marqueurs (sys_platform…) contre la machine qui l'exécute, pas contre
+  # --platform. Depuis Linux, il réclamerait uvloop (absent sous Windows) et
+  # oublierait colorama (requis sous Windows).
+  # ───────────────────────────────────────────────────────────────────────────
+  wheels-windows:
+    name: Wheels Python Windows (natif)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout du dépôt (requirements)
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Télécharge les wheels win_amd64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "Mise à jour de pip échouée" }
+          python -m pip download `
+            --dest wheels-windows `
+            --only-binary=:all: `
+            --index-url https://pypi.org/simple `
+            -r app/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw "pip download (Windows) a échoué" }
+          Get-ChildItem wheels-windows | Select-Object Name
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows
+          path: wheels-windows
+          if-no-files-found: error
+          retention-days: 7
+
   package-release:
     name: Assemblage + release GitHub
     needs:
@@ -245,6 +285,7 @@ jobs:
       - build-darwin-arm64-metal
       - build-darwin-arm64-cpu
       - build-linux-aarch64-cpu
+      - wheels-windows
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -313,10 +354,10 @@ jobs:
           python-version: "3.12"
 
       - name: Pré-installe les wheels Python par plateforme
-        # Le runner Ubuntu 22.04 a Python 3.10 par défaut. setup-python ci-dessus
-        # installe 3.12, ce qui permet à pip de calculer TOUS les tags ABI
-        # compatibles (cp312, cp311…cp39 en abi3, none) sans flags explicites.
-        # Seul --platform est nécessaire pour le cross-platform download.
+        # Résolution cross-platform avec le python3 du runner (jamais les
+        # interpréteurs embarqués ARM64/darwin : Exec format error).
+        # Un seul tag par --platform. Windows est résolu nativement (job
+        # wheels-windows) car pip évalue les marqueurs contre le runner.
         shell: bash
         run: |
           set -euo pipefail
@@ -333,24 +374,25 @@ jobs:
               python3 -m pip download \
                 --dest "${wheels_dir}" \
                 --platform "${pip_platform}" \
+                --python-version 3.12 \
+                --implementation cp \
                 --only-binary=:all: \
                 --index-url https://pypi.org/simple \
                 -r app/requirements.txt
           }
 
-          download_wheels "linux-x86_64"   "manylinux_2_28_x86_64"
-          download_wheels "linux-aarch64"   "manylinux_2_28_aarch64"
-          download_wheels "darwin-arm64"    "macosx_11_0_arm64"
-          download_wheels "darwin-x86_64"   "macosx_11_0_x86_64"
-
-          # Windows : même logique, même python3.12 du runner.
+          # Linux ARM64 : glibc >= 2.17 (tag unique, PAS la forme fusionnée).
+          download_wheels "linux-aarch64" "manylinux_2_17_aarch64"
+          # macOS Apple Silicon : pip accepte aussi les wheels universal2.
+          download_wheels "darwin-arm64"  "macosx_11_0_arm64"
+          # Windows x64 : wheels résolues nativement par le job wheels-windows
+          # (téléchargées dans artifacts/ par l'étape download-artifact).
+          if [ ! -d artifacts/wheels-windows ] || [ -z "$(ls -A artifacts/wheels-windows)" ]; then
+              echo "::error::Artifact wheels-windows manquant ou vide."
+              exit 1
+          fi
           mkdir -p "${PKG}/bin/windows/python/wheels"
-          python3 -m pip download \
-            --dest "${PKG}/bin/windows/python/wheels" \
-            --platform win_amd64 \
-            --only-binary=:all: \
-            --index-url https://pypi.org/simple \
-            -r app/requirements.txt
+          cp -a artifacts/wheels-windows/. "${PKG}/bin/windows/python/wheels/"
       - name: Génère CHECKSUMS.sha256 (racine du paquet)
         shell: bash
         run: |
