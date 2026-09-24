@@ -4,11 +4,19 @@
 # Auteur  : AfricAIsoft
 # Licence : MIT
 # Date    : 2026-08-24
+# Version : 0.6.1 (2026-09-24) - cle "windows" (nommage verrouille de la
+#           master copy), repli sur l ancien bin/windows-x86_64/ s il est
+#           seul present. Detection GPU inchangee.
 # ─────────────────────────────────────────────────────────────────────────────
 
 $ErrorActionPreference = "SilentlyContinue"
 $StudioRoot = Split-Path -Parent $PSScriptRoot
-$PlatKey = "windows-x86_64"
+# Nommage verrouille : bin/windows/. Repli retrocompatible sur l ancien
+# bin/windows-x86_64/ uniquement s il est le seul present.
+$PlatKey = "windows"
+if (-not (Test-Path "$StudioRoot/bin/windows") -and (Test-Path "$StudioRoot/bin/windows-x86_64")) {
+    $PlatKey = "windows-x86_64"
+}
 
 function Test-Binary($backend) {
     Test-Path "$StudioRoot/bin/$PlatKey/$backend/llama-server.exe"
