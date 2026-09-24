@@ -1,0 +1,124 @@
+<!-- ═════════════════════════════════════════════════════════════════════════
+     Rôle    : étape 1 du Key Builder — chargement de la release master copy.
+               Chemin de la master copy (modifiable), « Parcourir… » (dossier
+               décompressé), « Ouvrir une archive .zip… » (extraction puis
+               chargement), « Valider », résumé coloré, plateformes/backends
+               détectés et rapport détaillé des écarts.
+               S'appuie sur MainViewModel via l'héritage du DataContext parent.
+     Note    : AUCUNE chaîne visible en dur — tout le texte passe par
+               {x:Static props:Resources.*} (FR par défaut, override en-US).
+     Version : 0.6.0 (2026-09-24)
+     Auteur  : AfricAIsoft — Licence : MIT
+     ═════════════════════════════════════════════════════════════════════════ -->
+<UserControl x:Class="AfricAIsoft.KeyBuilder.Wpf.Views.MasterCopyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:AfricAIsoft.KeyBuilder.Wpf.ViewModels"
+             xmlns:props="clr-namespace:AfricAIsoft.KeyBuilder.Wpf.Properties"
+             d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <StackPanel>
+        <!-- Verrouille l'étape pendant une extraction d'archive ou un import de modèle. -->
+        <StackPanel.Style>
+            <Style TargetType="StackPanel">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsMasterCopyBusy}" Value="True">
+                        <Setter Property="IsEnabled" Value="False"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </StackPanel.Style>
+
+        <TextBlock FontWeight="Bold"
+                   Text="{x:Static props:Resources.MasterCopyTitle}"/>
+        <TextBlock Foreground="Gray" TextWrapping="Wrap" FontSize="12" Margin="0,2,0,6"
+                   Text="{x:Static props:Resources.MasterCopyHint}"/>
+
+        <!-- ═════════ Chemin + Parcourir ═════════ -->
+        <DockPanel Margin="0,0,0,6">
+            <Button DockPanel.Dock="Right" Padding="10,4" Margin="6,0,0,0"
+                    Content="{x:Static props:Resources.BrowseMasterCopyBtn}"
+                    ToolTip="{x:Static props:Resources.BrowseMasterCopyTooltip}"
+                    Command="{Binding BrowseMasterCopyFolderCommand}"/>
+            <TextBox Text="{Binding SourceRoot, UpdateSourceTrigger=LostFocus}"
+                     FontFamily="{StaticResource Mono}" VerticalContentAlignment="Center"
+                     ToolTip="{x:Static props:Resources.MasterCopyPathTooltip}"/>
+        </DockPanel>
+
+        <!-- ═════════ Archive .zip + Valider ═════════ -->
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <Button Padding="10,4" Margin="0,0,6,0"
+                    Content="{x:Static props:Resources.OpenMasterCopyArchiveBtn}"
+                    ToolTip="{x:Static props:Resources.OpenMasterCopyArchiveTooltip}"
+                    Command="{Binding OpenMasterCopyArchiveCommand}"/>
+            <Button Padding="10,4"
+                    Content="{x:Static props:Resources.ValidateMasterCopyBtn}"
+                    Command="{Binding ValidateMasterCopyCommand}"/>
+        </StackPanel>
+
+        <!-- ═════════ Résumé : vert si valide, gris pendant la validation, rouge sinon ═════════ -->
+        <TextBlock Text="{Binding MasterCopyValidationSummary}" TextWrapping="Wrap"
+                   FontWeight="SemiBold" Margin="0,2,0,0">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="#B3261E"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding MasterCopyIsValid}" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsMasterCopyValidating}" Value="True">
+                            <Setter Property="Foreground" Value="Gray"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+
+        <!-- ═════════ Plateformes / backends détectés ═════════ -->
+        <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,2,0,0">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding MasterCopyDetectedText}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+            <Run Text="{x:Static props:Resources.MasterCopyDetectedLabel}"/>
+            <Run Text="{Binding MasterCopyDetectedText, Mode=OneWay}"
+                 FontFamily="{StaticResource Mono}"/>
+        </TextBlock>
+
+        <!-- ═════════ Rapport détaillé des écarts (masqué s'il n'y en a pas) ═════════ -->
+        <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+            <ScrollViewer.Style>
+                <Style TargetType="ScrollViewer">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding MasterCopyIssues.Count}" Value="0">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ScrollViewer.Style>
+            <ItemsControl ItemsSource="{Binding MasterCopyIssues}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,1"
+                                   ToolTip="{Binding Path}">
+                            <Run Text="{Binding Severity, Mode=OneWay}" FontWeight="Bold"/>
+                            <Run Text="·"/>
+                            <Run Text="{Binding Code, Mode=OneWay}" FontFamily="{StaticResource Mono}"/>
+                            <Run Text="·"/>
+                            <Run Text="{Binding Message, Mode=OneWay}"/>
+                        </TextBlock>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Separator Margin="0,10,0,0"/>
+    </StackPanel>
+</UserControl>
