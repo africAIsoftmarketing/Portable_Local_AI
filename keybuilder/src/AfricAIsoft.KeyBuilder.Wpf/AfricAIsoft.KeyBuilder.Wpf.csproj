@@ -18,7 +18,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>AfricAIsoft.KeyBuilder</AssemblyName>
     <RootNamespace>AfricAIsoft.KeyBuilder.Wpf</RootNamespace>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>AfricAIsoft</Authors>
     <ProductName>AfricAIsoft Key Builder</ProductName>
     <!-- <ApplicationIcon>Assets\keybuilder.ico</ApplicationIcon> -->
