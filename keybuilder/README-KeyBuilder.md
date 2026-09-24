@@ -31,9 +31,19 @@ L'archive `AfricAIsoft-KeyBuilder-vX.Y.Z-win64.zip` contient :
 ## 3. Fabrication pas-à-pas
 
 1. Double-cliquez sur `AfricAIsoft-KeyBuilder.exe`.
-2. **Étape 1 — Master copy** : cliquez « Parcourir » et sélectionnez le
-   dossier de la master copy décompressée. Le Key Builder valide la
-   structure attendue :
+2. **Étape 1 — Master copy** : deux façons de charger la release.
+   - « Parcourir... » : sélectionnez le dossier de la master copy
+     décompressée. Si vous choisissez le dossier *parent* de l'extraction,
+     la racine `AfricAIsoft-Portable-vX.Y.Z/` est détectée automatiquement.
+   - « Ouvrir une archive .zip... » : sélectionnez directement l'archive de
+     la release ; elle est extraite dans
+     `%LOCALAPPDATA%\AfricAIsoft\KeyBuilder\MasterCopies\` puis chargée.
+
+   Les modèles GGUF et skills MCP sont rechargés, les plateformes absentes
+   de la release sont grisées, et la dernière master copy est mémorisée
+   pour le prochain lancement. La release n'embarquant **aucun modèle**,
+   utilisez « Importer un modèle... » pour copier un `.gguf` dans son
+   dossier `models/`. Le Key Builder valide la structure attendue :
    - Dossiers obligatoires : `config/`, `mcp-servers/`, `bin/`, `ui/`, `scripts/`.
    - Au moins un lanceur : `start-windows.bat`, `start-linux.sh` ou `start-mac.command`.
    - Plateformes reconnues sous `bin/` (nommage verrouillé) :
