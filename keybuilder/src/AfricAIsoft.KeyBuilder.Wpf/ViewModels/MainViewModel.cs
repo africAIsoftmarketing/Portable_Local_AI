@@ -3,6 +3,10 @@
 //           estimation dynamique, exécution + batch. S'appuie exclusivement sur
 //           le Core (aucune API Windows directement).
 // Auteur  : AfricAIsoft — Licence : MIT — Date : 2026-08-24
+// Version : 0.6.0 (2026-09-24) — LoadSources rechargeable (changement de
+//           master copy), restauration de la dernière master copy au
+//           démarrage, PlatformVm observable (IsAvailable). Voir
+//           MainViewModel.MasterCopy.cs pour le flux de chargement.
 // ─────────────────────────────────────────────────────────────────────────────
 using System.Collections.ObjectModel;
 using System.Threading;
@@ -53,7 +57,9 @@ public partial class MainViewModel : ObservableObject, IProgressReporter
         _drivesProv.DrivesChanged += (_, e) => RefreshDrivesFrom(e.Current);
         _drivesProv.StartMonitoring();
         RefreshDrives();
+        RestoreLastMasterCopy();            // 0.6.0 — dernière master copy utilisée
         LoadSources();
+        CompleteMasterCopyInitialization(); // 0.6.0 — active le rechargement + validation
     }
 
     // ─── Champs bindés ──────────────────────────────────────────────────────
@@ -157,13 +163,27 @@ public partial class MainViewModel : ObservableObject, IProgressReporter
         });
     }
 
+    /// <summary>
+    /// (Re)charge modèles et skills depuis SourceRoot. Idempotent depuis 0.6.0 :
+    /// appelé au démarrage ET à chaque changement de master copy. Conserve le
+    /// modèle sélectionné et les skills décochés s'ils existent encore.
+    /// </summary>
     private void LoadSources()
     {
+        var previousModel = SelectedModel?.Info.FileName;
+        var deselectedSkills = new HashSet<string>(
+            Skills.Where(s => !s.IsSelected).Select(s => s.Id), StringComparer.Ordinal);
+        Models.Clear();
+        Skills.Clear();
+
         // Modèles GGUF
         var mdir = _fs.CombinePath(SourceRoot, "models");
         if (_fs.DirectoryExists(mdir))
             foreach (var f in _fs.EnumerateFiles(mdir, "*.gguf", false))
                 Models.Add(new ModelVm(new GgufValidator(_fs).Inspect(f)));
+        SelectedModel = Models.FirstOrDefault(m => string.Equals(
+                            m.Info.FileName, previousModel, StringComparison.OrdinalIgnoreCase))
+                        ?? (Models.Count == 1 ? Models[0] : null);
         // Skills
         var sd = _fs.CombinePath(SourceRoot, "mcp-servers");
         if (_fs.DirectoryExists(sd))
@@ -171,11 +191,13 @@ public partial class MainViewModel : ObservableObject, IProgressReporter
             {
                 var id = _fs.GetFileName(d);
                 if (id.StartsWith("_")) continue;
-                Skills.Add(new SkillVm(id, id, true));
+                Skills.Add(new SkillVm(id, id, !deselectedSkills.Contains(id)));
             }
-        // Plateformes
-        foreach (var p in Enum.GetValues<TargetPlatform>())
-            Platforms.Add(new PlatformVm(p, p == TargetPlatform.WindowsX64));
+        // Plateformes : créées une seule fois (la sélection de l'opérateur est
+        // conservée ; la disponibilité est mise à jour par la validation).
+        if (Platforms.Count == 0)
+            foreach (var p in Enum.GetValues<TargetPlatform>())
+                Platforms.Add(new PlatformVm(p, p == TargetPlatform.WindowsX64));
     }
 
     // ─── IProgressReporter ──────────────────────────────────────────────────
@@ -212,11 +234,19 @@ public sealed class SkillVm
     public SkillVm(string id, string name, bool selected)
         { Id = id; DisplayName = name; IsSelected = selected; }
 }
-public sealed class PlatformVm
+/// <summary>
+/// Plateforme cible cochable. Observable depuis 0.6.0 : la validation de la
+/// master copy peut décocher / désactiver une plateforme absente de bin/.
+/// </summary>
+public sealed partial class PlatformVm : ObservableObject
 {
     public TargetPlatform Value { get; }
     public string DisplayName { get; }
-    public bool IsSelected { get; set; }
+    /// <summary>Nom du dossier sous bin/ (ex. « windows », « darwin-arm64 »).</summary>
+    public string BinaryDirName => Value.ToBinaryDir()["bin/".Length..];
+    [ObservableProperty] private bool _isSelected;
+    /// <summary>false si la master copy chargée n'embarque pas cette plateforme.</summary>
+    [ObservableProperty] private bool _isAvailable = true;
     public PlatformVm(TargetPlatform v, bool sel)
-        { Value = v; DisplayName = v.DisplayName(); IsSelected = sel; }
+        { Value = v; DisplayName = v.DisplayName(); _isSelected = sel; }
 }
