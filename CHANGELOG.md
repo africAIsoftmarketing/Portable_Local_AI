@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## [1.0.3] Clé USB Windows démarrable en un double-clic — 2026-09-24
+
+### Corrigé
+- **Lanceur Windows** (`start-windows.bat`) : chemins alignés sur le nommage
+  verrouillé `bin\windows\` (repli sur l'ancien `bin\windows-x86_64\`),
+  détection du backend, runtime VC++ système ou embarqué, messages guidés
+  (clé en lecture seule, port occupé, composant manquant).
+- **Navigateur** ouvert automatiquement dès que le studio répond (et non
+  après un délai fixe de 3 s) ; un second double-clic rouvre simplement
+  l'interface si le studio tourne déjà.
+- **Dépendances Python hors ligne sans pip** : `scripts/install-wheels.py`
+  installe les wheels embarquées dans le Python « embeddable » de Windows.
+- **Clé de plateforme Windows** : `app/platform_utils/detect.py` et
+  `scripts/detect-backend.ps1` résolvent `bin/windows/`.
+- **Clés fabriquées par le Key Builder refusées au démarrage**
+  (`settings.json invalide (schéma)`) : le schéma accepte désormais les
+  métadonnées de la clé `version`, `client_id`, `serial_number`,
+  `disabled_features` (`app/config/models.py`, `config/settings.schema.json`).
+- **Key Builder 0.6.1** : `settings.json` de la clé construit à partir de
+  `settings.example.json` (port 8080 attendu par les lanceurs, MCP activé).
+- `.gitattributes` : CRLF imposé aux `.bat`/`.cmd`, LF aux `.sh`/`.command`.
+
 ## [1.0.2] Purge historique Ed25519 — token GitHub redacté — 2026-09-21
 
 ### Sécurité
