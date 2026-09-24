@@ -25,6 +25,11 @@
 #     (glibc ≥ 2.17). ⚠ Passer UN tag par --platform : la forme fusionnée
 #     `manylinux_2_17_aarch64.manylinux2014_aarch64` (nom de fichier wheel)
 #     n'est reconnue par pip comme aucun tag → « from versions: none ».
+#   - Structure garantie : chaque archive est contrôlée AVANT compression
+#     contre les règles du Key Builder (MasterCopyValidator) — dossiers
+#     obligatoires, lanceur, plateformes et backends verrouillés,
+#     llama-server présent, python/wheels/ non vide, CHECKSUMS.sha256.
+#     Tout écart fait échouer le job : aucune archive non conforme publiée.
 #   - GITHUB_TOKEN automatique uniquement ; aucun secret custom requis.
 # Auteur  : AfricAIsoft — Licence : MIT
 # ──────────────────────────────────────────────────────────────────────────────
@@ -299,6 +304,20 @@ jobs:
         run: |
           set -euo pipefail
           PKG="AfricAIsoft-Portable-v${VERSION}"
+          # Dossiers obligatoires et lanceur exigés par le Key Builder
+          # (MasterCopyLayout.RequiredRootDirectories / LauncherCandidates).
+          missing=""
+          for d in config mcp-servers ui scripts; do
+            [ -d "${d}" ] || missing="${missing} ${d}/"
+          done
+          if [ -n "${missing}" ]; then
+            echo "::error::Dossiers obligatoires absents du dépôt :${missing}"
+            exit 1
+          fi
+          if [ ! -e start-windows.bat ] && [ ! -e start-linux.sh ] && [ ! -e start-mac.command ]; then
+            echo "::error::Aucun lanceur (start-windows.bat / start-linux.sh / start-mac.command)."
+            exit 1
+          fi
           mkdir -p "${PKG}"
           for item in app config mcp-servers skills scripts ui tests docs start-linux.sh start-mac.command start-windows.bat stop-linux.sh stop-mac.sh install.sh install.bat start.sh start.bat README.md CHANGELOG.md LICENSE VERSION release.json release.json.sig; do
             if [ -e "${item}" ]; then cp -a "${item}" "${PKG}/"; fi
@@ -322,8 +341,12 @@ jobs:
           set -euo pipefail
           declare -A MAP=([llama-windows-cpu]="${PKG}/bin/windows/cpu" [llama-darwin-arm64-metal]="${PKG}/bin/darwin-arm64/metal" [llama-darwin-arm64-cpu]="${PKG}/bin/darwin-arm64/cpu" [llama-linux-aarch64-cpu]="${PKG}/bin/linux-aarch64/cpu")
           for name in "${!MAP[@]}"; do
-            src="artifacts/${name}"; dst="${MAP[$name]}"; mkdir -p "${dst}"
-            if [ -d "${src}" ]; then cp -a "${src}/." "${dst}/"; else echo "::warning::Artifact ${name} manquant"; fi
+            src="artifacts/${name}"; dst="${MAP[$name]}"
+            if [ ! -d "${src}" ] || [ -z "$(ls -A "${src}")" ]; then
+              echo "::error::Artifact ${name} manquant ou vide (backend vide interdit)."
+              exit 1
+            fi
+            mkdir -p "${dst}"; cp -a "${src}/." "${dst}/"
           done
           find "${PKG}/bin/linux-aarch64" "${PKG}/bin/darwin-arm64" -type f ! -name "*.so*" ! -name "*.dylib" -exec chmod +x {} + 2>/dev/null || true
           find "${PKG}" -maxdepth 2 -type f \( -name "*.sh" -o -name "*.command" \) -exec chmod +x {} +
@@ -393,18 +416,52 @@ jobs:
           fi
           mkdir -p "${PKG}/bin/windows/python/wheels"
           cp -a artifacts/wheels-windows/. "${PKG}/bin/windows/python/wheels/"
-      - name: Génère CHECKSUMS.sha256 (racine du paquet)
+      - name: Contrôle de conformité + construit les archives (.zip)
         shell: bash
         run: |
           set -euo pipefail
-          ( cd "${PKG}" && find . -type f ! -name "CHECKSUMS.sha256" -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > CHECKSUMS.sha256 )
-          wc -l "${PKG}/CHECKSUMS.sha256"
-      - name: Construit les archives (.zip)
-        shell: bash
-        run: |
-          set -euo pipefail
+          shopt -s nullglob
           mkdir -p dist
           BASE="AfricAIsoft-Portable-v${VERSION}"
+          # Réplique des règles de MasterCopyValidator.cs (Key Builder).
+          check_layout() {
+            local root="$1" label="$2" errs=0 nplat=0
+            declare -A VALID=(
+              [windows]="cpu cuda vulkan"
+              [darwin-arm64]="cpu metal"
+              [darwin-x86_64]="cpu metal"
+              [linux-x86_64]="cpu cuda vulkan rocm"
+              [linux-aarch64]="cpu"
+            )
+            for d in config mcp-servers bin ui scripts; do
+              [ -d "${root}/${d}" ] || { echo "::error::[${label}] Dossier obligatoire absent : ${d}/"; errs=$((errs+1)); }
+            done
+            if [ ! -e "${root}/start-windows.bat" ] && [ ! -e "${root}/start-linux.sh" ] && [ ! -e "${root}/start-mac.command" ]; then
+              echo "::error::[${label}] Aucun lanceur à la racine."; errs=$((errs+1))
+            fi
+            for platdir in "${root}"/bin/*/; do
+              local plat; plat="$(basename "${platdir}")"
+              if [ -z "${VALID[$plat]+x}" ]; then
+                echo "::error::[${label}] Plateforme inconnue sous bin/ : ${plat}"; errs=$((errs+1)); continue
+              fi
+              nplat=$((nplat+1))
+              for bdir in "${platdir}"*/; do
+                local b; b="$(basename "${bdir}")"
+                [ "${b}" = "python" ] && continue
+                case " ${VALID[$plat]} " in
+                  *" ${b} "*) ;;
+                  *) echo "::error::[${label}] Backend invalide : ${plat}/${b}"; errs=$((errs+1)); continue ;;
+                esac
+                local srv=( "${bdir}"llama-server* )
+                [ ${#srv[@]} -gt 0 ] || { echo "::error::[${label}] llama-server absent : ${plat}/${b}"; errs=$((errs+1)); }
+              done
+              local whl=( "${platdir}"python/wheels/*.whl )
+              [ ${#whl[@]} -gt 0 ] || { echo "::error::[${label}] Aucune wheel : ${plat}/python/wheels/"; errs=$((errs+1)); }
+            done
+            [ ${nplat} -gt 0 ] || { echo "::error::[${label}] Aucune plateforme sous bin/."; errs=$((errs+1)); }
+            [ ${errs} -eq 0 ] && echo "✓ [${label}] conforme (${nplat} plateforme(s))"
+            return ${errs}
+          }
           make_zip() {
             local name="$1"; shift; local -a includes=("$@"); local staging="staging-${name}"
             rm -rf "${staging}"; mkdir -p "${staging}/${BASE}"
@@ -413,7 +470,11 @@ jobs:
               if [ -e "${PKG}/${item}" ]; then cp -a "${PKG}/${item}" "${staging}/${BASE}/"; fi
             done
             mkdir -p "${staging}/${BASE}/bin"
-            for inc in "${includes[@]}"; do if [ -d "${PKG}/bin/${inc}" ]; then cp -a "${PKG}/bin/${inc}" "${staging}/${BASE}/bin/"; fi; done
+            for inc in "${includes[@]}"; do
+              if [ ! -d "${PKG}/bin/${inc}" ]; then echo "::error::[${name}] bin/${inc} absent du paquet."; return 1; fi
+              cp -a "${PKG}/bin/${inc}" "${staging}/${BASE}/bin/"
+            done
+            check_layout "${staging}/${BASE}" "${name}"
             ( cd "${staging}/${BASE}" && find . -type f ! -name "CHECKSUMS.sha256" -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > CHECKSUMS.sha256 )
             ( cd "${staging}" && zip -qr "../dist/${BASE}-${name}.zip" "${BASE}" )
             rm -rf "${staging}"
