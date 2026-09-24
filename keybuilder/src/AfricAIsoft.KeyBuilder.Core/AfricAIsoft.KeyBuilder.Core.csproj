@@ -15,7 +15,7 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <AssemblyName>AfricAIsoft.KeyBuilder.Core</AssemblyName>
     <RootNamespace>AfricAIsoft.KeyBuilder.Core</RootNamespace>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>AfricAIsoft</Authors>
     <PackageId>AfricAIsoft.KeyBuilder.Core</PackageId>
   </PropertyGroup>
