@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AfricAIsoft Portable Studio",
         description="Distribution portable USB 100% offline — API OpenAI-compatible + skills MCP + UI FR/EN.",
-        version="1.0.0",
+        version="1.0.3",
         lifespan=lifespan,
         openapi_url=f"{API_PREFIX}/openapi.json" if API_PREFIX else "/openapi.json",
         docs_url=f"{API_PREFIX}/docs" if API_PREFIX else "/docs",
@@ -160,7 +160,7 @@ def create_app() -> FastAPI:
         )
         return {
             "status": "ok",
-            "version": "1.0.0",
+            "version": "1.0.3",
             "platform": st.platform,
             "backend": st.backend,
             "components": {
