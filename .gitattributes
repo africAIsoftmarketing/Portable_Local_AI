@@ -1,0 +1,13 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Rôle    : fins de ligne imposées par type de script, quel que soit le poste
+#           ou le runner CI qui fait le checkout (la release est assemblée sur
+#           Linux puis exécutée sous Windows / macOS / Linux).
+# Version : 0.6.1 (2026-09-24)
+# ─────────────────────────────────────────────────────────────────────────────
+# Windows : CRLF obligatoire — cmd.exe interprète mal les étiquettes et les goto
+# d'un .bat en LF.
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+# POSIX : LF obligatoire — un CRLF casse le shebang (« bash\r: not found »).
+*.sh      text eol=lf
+*.command text eol=lf
