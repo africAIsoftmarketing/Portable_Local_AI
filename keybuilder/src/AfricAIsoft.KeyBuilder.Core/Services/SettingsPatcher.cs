@@ -2,6 +2,11 @@
 // Rôle    : patch de settings.json sur la clé (modèle actif, version, features
 //           désactivées, id client). Écriture atomique via tmp + move.
 // Auteur  : AfricAIsoft — Licence : MIT — Date : 2026-08-24
+// Version : 0.6.1 (2026-09-24) — si settings.json est absent, part de
+//           config/settings.example.json copié sur la clé (configuration
+//           complète : port 8080 attendu par les lanceurs, MCP activé…)
+//           au lieu d'un minimum codé en dur ; « version » écrite aussi
+//           lorsque settings.json existait déjà.
 // ─────────────────────────────────────────────────────────────────────────────
 using AfricAIsoft.KeyBuilder.Core.Abstractions;
 using AfricAIsoft.KeyBuilder.Core.Models;
@@ -17,8 +22,15 @@ public sealed class SettingsPatcher
     public void Apply(string targetRoot, BuildPlan plan)
     {
         var path = _fs.CombinePath(targetRoot, "config", "settings.json");
+        // 0.6.1 : la release ne livre jamais settings.json (secrets possibles),
+        // mais toujours settings.example.json. On part de ce modèle complet,
+        // puis la branche « fichier existant » ci-dessous le personnalise.
+        var example = _fs.CombinePath(targetRoot, "config", "settings.example.json");
+        if (!_fs.FileExists(path) && _fs.FileExists(example))
+            _fs.WriteAllText(path, _fs.ReadAllText(example));
         if (!_fs.FileExists(path))
         {
+            // Repli historique (aucun modèle disponible) : minimum viable.
             // Créer un minimum viable si absent.
             var defaults = new
             {
@@ -71,6 +83,8 @@ public sealed class SettingsPatcher
                 w.WriteString("path", $"models/{plan.ModelFile}");
                 w.WriteEndObject();
             }
+            if (!seen.Contains("version"))
+                w.WriteString("version", plan.Version);
             if (!seen.Contains("client_id") && plan.ClientId is not null)
                 w.WriteString("client_id", plan.ClientId);
             if (!seen.Contains("serial_number"))
