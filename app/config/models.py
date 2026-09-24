@@ -3,6 +3,10 @@ Rôle    : modèles Pydantic pour la validation stricte de config/settings.json.
 Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
+Version : 1.0.1 (2026-09-24) — accepte les métadonnées de traçabilité écrites
+          par le Key Builder à la racine de settings.json (version,
+          client_id, serial_number, disabled_features). Tout autre champ
+          inconnu reste refusé (extra="forbid").
 """
 from __future__ import annotations
 
@@ -120,3 +124,11 @@ class Settings(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
+
+    # ── Métadonnées de la clé (écrites par le Key Builder, informatives) ──────
+    # Absentes sur une installation hors clé. Sans ces champs, une clé
+    # fabriquée par le Key Builder refusait de démarrer (extra_forbidden).
+    version: Optional[str] = None           # version du build de la clé
+    client_id: Optional[str] = None         # identifiant client saisi à la fabrication
+    serial_number: Optional[str] = None     # UUID de la clé (identique à marker.json)
+    disabled_features: List[str] = Field(default_factory=list)
