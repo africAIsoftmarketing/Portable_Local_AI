@@ -41,4 +41,16 @@
   <data name="KnowledgeAddFilesTooltip"><value>Multi-select .pdf/.txt/.md</value></data>
   <data name="KnowledgeAddFolderTooltip"><value>Recursive import — structure preserved</value></data>
   <data name="KnowledgeReindexTooltip"><value>Writes knowledge/.reindex to trigger RAG index rebuild on the drive</value></data>
+  <!-- Step 1 Master copy (0.6.0) -->
+  <data name="MasterCopyTitle"><value>Step 1 — Master copy</value></data>
+  <data name="MasterCopyHint"><value>Unzipped AfricAIsoft-Portable-vX.Y.Z release folder, or the release .zip archive (extracted automatically). The layout is validated on every load; the last master copy is remembered.</value></data>
+  <data name="BrowseMasterCopyBtn"><value>Browse...</value></data>
+  <data name="BrowseMasterCopyTooltip"><value>Select the master copy root folder (the one containing bin/, config/, ui/). If you pick the extraction parent folder, the root is detected automatically.</value></data>
+  <data name="MasterCopyPathTooltip"><value>Path of the loaded master copy. You can also type it: it is reloaded when the field loses focus.</value></data>
+  <data name="OpenMasterCopyArchiveBtn"><value>Open a .zip archive...</value></data>
+  <data name="OpenMasterCopyArchiveTooltip"><value>Extracts the release archive to %LOCALAPPDATA%\AfricAIsoft\KeyBuilder\MasterCopies, then loads it.</value></data>
+  <data name="ValidateMasterCopyBtn"><value>Validate</value></data>
+  <data name="MasterCopyDetectedLabel"><value>Detected platforms:</value></data>
+  <data name="ImportGgufModelBtn"><value>Import a model...</value></data>
+  <data name="ImportGgufModelTooltip"><value>Copies a .gguf file into models/ of the loaded master copy (the release ships no model).</value></data>
 </root>

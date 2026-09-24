@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Rôle    : accesseurs typés vers Resources.resx (culture neutre = fr-FR ;
-//           override en-US disponible). Utilisés par KnowledgeBaseView.xaml
+//           override en-US disponible). Utilisés par KnowledgeBaseView.xaml,
+//           MasterCopyView.xaml et MainWindow.xaml (0.6.0)
 //           via {x:Static props:Resources.XXX} — garantit aucune chaîne en dur
 //           dans le XAML. Le ResourceManager charge le .resources embarqué.
 // Auteur  : AfricAIsoft — Licence : MIT
@@ -60,4 +61,17 @@ public static class Resources
     public static string KnowledgeAddFilesTooltip       => Get(nameof(KnowledgeAddFilesTooltip));
     public static string KnowledgeAddFolderTooltip      => Get(nameof(KnowledgeAddFolderTooltip));
     public static string KnowledgeReindexTooltip        => Get(nameof(KnowledgeReindexTooltip));
+
+    // ─── Étape 1 — Master copy (0.6.0) — écran MasterCopyView + MainWindow ─
+    public static string MasterCopyTitle                => Get(nameof(MasterCopyTitle));
+    public static string MasterCopyHint                 => Get(nameof(MasterCopyHint));
+    public static string BrowseMasterCopyBtn            => Get(nameof(BrowseMasterCopyBtn));
+    public static string BrowseMasterCopyTooltip        => Get(nameof(BrowseMasterCopyTooltip));
+    public static string MasterCopyPathTooltip          => Get(nameof(MasterCopyPathTooltip));
+    public static string OpenMasterCopyArchiveBtn       => Get(nameof(OpenMasterCopyArchiveBtn));
+    public static string OpenMasterCopyArchiveTooltip   => Get(nameof(OpenMasterCopyArchiveTooltip));
+    public static string ValidateMasterCopyBtn          => Get(nameof(ValidateMasterCopyBtn));
+    public static string MasterCopyDetectedLabel        => Get(nameof(MasterCopyDetectedLabel));
+    public static string ImportGgufModelBtn             => Get(nameof(ImportGgufModelBtn));
+    public static string ImportGgufModelTooltip         => Get(nameof(ImportGgufModelTooltip));
 }
