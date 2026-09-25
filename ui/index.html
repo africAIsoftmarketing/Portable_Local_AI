@@ -78,13 +78,26 @@
         </div>
 
         <div id="messages" class="messages" data-testid="messages"></div>
+        <div id="drop-overlay" class="drop-overlay" data-testid="drop-overlay"
+             data-i18n="chat.dropHint" hidden>&nbsp;</div>
 
         <form id="chat-form" class="composer" data-testid="chat-form">
-            <textarea id="chat-input" rows="2"
-                      data-testid="chat-input"
-                      data-i18n-placeholder="chat.placeholder"
-                      placeholder=""
-                      required></textarea>
+            <div class="composer-main">
+                <div id="attach-chips" class="attach-chips"
+                     data-testid="attach-chips" hidden></div>
+                <textarea id="chat-input" rows="2"
+                          data-testid="chat-input"
+                          data-i18n-placeholder="chat.placeholder"
+                          placeholder=""
+                          required></textarea>
+            </div>
+            <input id="attach-input" type="file" multiple hidden
+                   data-testid="attach-input"
+                   accept=".txt,.md,.pdf,.csv,.tsv,.json,.jsonl,.log,.xml,.html,.htm,.yml,.yaml,.toml,.ini,.cfg,.conf,.py,.js,.ts,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.sql,.sh,.bat,.ps1,.cbl,.cob,.cpy,.css,.rst,.tex" />
+            <button id="attach-btn" type="button" class="attach-btn"
+                    data-testid="attach-btn"
+                    data-i18n-title="chat.attach" title=""
+                    aria-label="Joindre">&#128206;</button>
             <button id="chat-send-btn" type="submit" class="send-btn"
                     data-testid="chat-send-btn" data-i18n="chat.send">&nbsp;</button>
         </form>
