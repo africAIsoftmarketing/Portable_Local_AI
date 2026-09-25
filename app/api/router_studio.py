@@ -10,15 +10,24 @@ Rôle    : routeur endpoints studio (system prompt, config, skills, conversation
           - POST    /skills/{skill_name}/invoke  (schema SkillInvokePayload)
           - POST    /skills/rag/reindex
           - GET     /skills/rag/documents   ← nouveau Phase 3
+          - POST    /skills/rag/upload      ← 1.0.6 (fichiers joints au chat)
           - GET/POST/PUT/DELETE /conversations[...]      ← Phase 4
           - POST    /models/switch                        ← Phase 4
           - GET     /events (SSE)
 Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
+Version : 1.0.6 (2026-09-25) — POST /skills/rag/upload (JSON base64, sans
+          dépendance multipart) ; /skills/rag/reindex et /invoke renvoient une
+          erreur HTTP propre (503/502) au lieu d'une exception ASGI quand le
+          skill est indisponible ; /skills attend brièvement la fin du
+          démarrage MCP (qui tourne désormais en arrière-plan).
 """
 from __future__ import annotations
 
+import asyncio
+import base64
+import binascii
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -80,6 +89,25 @@ class ConversationMessage(BaseModel):
 class ConversationAppendPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     messages: list[ConversationMessage] = Field(..., min_length=1, max_length=200)
+
+
+class RagUploadPayload(BaseModel):
+    """Corps de POST /skills/rag/upload — fichier encodé en base64."""
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(..., min_length=1, max_length=255)
+    content_base64: str = Field(..., min_length=0, max_length=28_000_000)
+
+
+async def _wait_mcp_ready(request: Request, timeout: float) -> None:
+    """Attend (borné) la fin du démarrage MCP lancé en arrière-plan."""
+    reg = getattr(request.app.state, "mcp", None)
+    ev = getattr(reg, "ready", None)
+    if ev is None or ev.is_set():
+        return
+    try:
+        await asyncio.wait_for(ev.wait(), timeout=timeout)
+    except asyncio.TimeoutError:
+        pass
 
 
 class ModelSwitchPayload(BaseModel):
@@ -202,6 +230,7 @@ def build_studio_router() -> APIRouter:
     # ═════════════════════════════════════════════════════════════════════════
     @router.get("/skills", summary="Liste des skills MCP et leur état")
     async def list_skills(request: Request):
+        await _wait_mcp_ready(request, 5.0)
         reg = getattr(request.app.state, "mcp", None)
         if reg is None:
             return {"enabled": False, "skills": []}
@@ -218,6 +247,7 @@ def build_studio_router() -> APIRouter:
     )
     async def invoke_skill(skill_name: str, request: Request,
                            payload: SkillInvokePayload):
+        await _wait_mcp_ready(request, 150.0)
         reg = getattr(request.app.state, "mcp", None)
         if reg is None or skill_name not in reg.clients:
             raise HTTPException(status_code=404, detail=f"Skill inconnu : {skill_name}")
@@ -232,11 +262,99 @@ def build_studio_router() -> APIRouter:
     @router.post("/skills/rag/reindex",
                  summary="Force la réindexation du RAG (raccourci)")
     async def rag_reindex(request: Request):
+        await _wait_mcp_ready(request, 150.0)
         reg = getattr(request.app.state, "mcp", None)
         if reg is None or "rag" not in reg.clients:
             raise HTTPException(status_code=404, detail="Skill rag indisponible")
-        result = await reg.clients["rag"].call("reindex_knowledge_base", {})
+        try:
+            result = await reg.clients["rag"].call("reindex_knowledge_base", {})
+        except Exception as e:  # noqa: BLE001 — plus d'exception ASGI brute
+            logger.warning("Réindexation RAG impossible : %s", e)
+            raise HTTPException(status_code=503, detail={
+                "error": "rag_unavailable",
+                "message": ("Skill RAG indisponible : réindexation impossible. "
+                            "Les fichiers joints restent utilisables dans le chat."),
+                "cause": str(e)})
         return {"status": "ok", "result": result}
+
+    @router.post("/skills/rag/upload",
+                 summary="Ajoute un fichier à la base de connaissances RAG")
+    async def rag_upload(request: Request, payload: RagUploadPayload):
+        """
+        Enregistre le fichier dans mcp-servers/rag/knowledge/documents/.
+        txt/md/pdf tels quels ; fichiers texte/code (csv, json, py, cbl…)
+        convertis en UTF-8 et suffixés .txt pour l'indexation. Réindexe via
+        le skill RAG s'il tourne (sinon l'index se met à jour tout seul à la
+        prochaine recherche). Utilisable immédiatement par le chat.
+        """
+        from app.rag import local_search as rl
+
+        stored, kind = rl.storage_name(payload.filename)
+        if stored is None:
+            raise HTTPException(status_code=415, detail={
+                "error": "unsupported_type", "message": kind})
+        try:
+            raw = base64.b64decode(payload.content_base64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=400, detail={
+                "error": "bad_base64", "message": "Contenu base64 invalide."})
+        if len(raw) > rl.MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail={
+                "error": "too_large",
+                "message": f"Fichier trop volumineux (max {rl.MAX_UPLOAD_BYTES // (1024*1024)} Mo)."})
+        if kind == "pdf":
+            if not raw.startswith(b"%PDF"):
+                raise HTTPException(status_code=415, detail={
+                    "error": "bad_pdf", "message": "Ce fichier n'est pas un PDF valide."})
+            data = raw
+        else:
+            if b"\x00" in raw[:4096]:
+                raise HTTPException(status_code=415, detail={
+                    "error": "binary", "message": "Fichier binaire non pris en charge."})
+            try:
+                text = raw.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                text = raw.decode("cp1252", errors="replace")
+            data = text.replace("\r\n", "\n").encode("utf-8")
+
+        dest = rl.DOCS_DIR / stored
+        try:
+            rl.DOCS_DIR.mkdir(parents=True, exist_ok=True)
+            replaced = dest.exists()
+            tmp = dest.with_name(dest.name + ".part")
+            tmp.write_bytes(data)
+            tmp.replace(dest)
+        except OSError as e:
+            raise HTTPException(status_code=507, detail={
+                "error": "write_failed",
+                "message": f"Écriture impossible sur la clé : {e}"})
+
+        # Réindexation MCP : best effort, non bloquante pour l'utilisateur.
+        indexed_by_skill = False
+        reg = getattr(request.app.state, "mcp", None)
+        client = reg.clients.get("rag") if reg is not None else None
+        if client is not None and client.status == "running":
+            try:
+                await asyncio.wait_for(
+                    client.call("reindex_knowledge_base", {}), timeout=60)
+                indexed_by_skill = True
+            except Exception as e:  # noqa: BLE001
+                logger.info("Upload RAG : réindexation skill différée (%s)", e)
+
+        # Index local (utilisé par le chat) : construit maintenant pour
+        # valider l'extraction et renvoyer le nombre de passages.
+        try:
+            passages = await asyncio.to_thread(
+                lambda: sum(1 for p in rl._ensure_index()[1]
+                            if p["source"] == stored))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Upload RAG : indexation locale KO : %s", e)
+            passages = 0
+
+        logger.info("RAG upload : %s (%d o, %d passage(s))", stored, len(data), passages)
+        return {"status": "ok", "stored_as": stored, "size_bytes": len(data),
+                "replaced": replaced, "passages": passages,
+                "indexed_by_skill": indexed_by_skill}
 
     @router.get("/skills/rag/documents",
                 summary="Liste les documents indexés dans la base RAG")

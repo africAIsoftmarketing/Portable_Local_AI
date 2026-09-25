@@ -5,9 +5,15 @@ Rôle    : routeur /v1/* OpenAI-compatible. Proxy vers llama-server avec
 Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
+Version : 1.0.6 (2026-09-25) — extension propriétaire `rag` :
+          `"rag": {"sources": ["fichier.pdf", ...]}` (ou `"rag": true` pour
+          toute la base) → les passages BM25 pertinents pour le dernier
+          message utilisateur sont ajoutés au system prompt. Le champ est
+          retiré avant l'envoi à llama-server ; streaming inchangé.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -110,6 +116,30 @@ def build_v1_router() -> APIRouter:
             payload["messages"] = [{"role": "system", "content": resolved_sp}] + non_system
         else:
             payload["messages"] = non_system
+
+        # ── Fichiers joints (RAG) : contexte injecté dans le system prompt ──
+        rag_opt = payload.pop("rag", None)
+        if rag_opt:
+            sources = None
+            if isinstance(rag_opt, dict):
+                srcs = rag_opt.get("sources")
+                if isinstance(srcs, list):
+                    sources = [str(x) for x in srcs if isinstance(x, str)][:50] or None
+            query = next((m.get("content") for m in reversed(non_system)
+                          if isinstance(m, dict) and m.get("role") == "user"
+                          and isinstance(m.get("content"), str)), "")
+            if query.strip():
+                from app.rag.local_search import build_context
+                ctx = await asyncio.to_thread(build_context, query, sources)
+                if ctx:
+                    msgs = payload["messages"]
+                    if msgs and msgs[0].get("role") == "system":
+                        msgs[0] = {"role": "system",
+                                   "content": (msgs[0]["content"] or "") + "\n\n" + ctx}
+                    else:
+                        payload["messages"] = [{"role": "system", "content": ctx}] + msgs
+                    logger.info("RAG : contexte injecté (%d car., sources=%s)",
+                                len(ctx), sources or "toutes")
 
         stream = bool(payload.get("stream", False))
 
