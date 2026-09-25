@@ -5,4 +5,4 @@ Licence : MIT
 Date    : 2026-08-24
 """
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"
