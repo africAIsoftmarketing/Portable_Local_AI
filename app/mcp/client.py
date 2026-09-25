@@ -5,6 +5,11 @@ Rôle    : client MCP stdio (JSON-RPC 2.0 line-delimited). Chaque instance gère
 Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
+Version : 1.0.5 (2026-09-25) — timeout de DÉMARRAGE (initialize + tools/list)
+          distinct du timeout par appel : sur clé USB lente, le premier spawn
+          du Python embarqué (lecture stdlib + site-packages, scan antivirus
+          des exécutables sur média amovible) peut dépasser 30 s. Les appels
+          d'outils au runtime gardent, eux, un délai court.
 """
 from __future__ import annotations
 
@@ -28,11 +33,14 @@ class MCPClient:
     """Un client = un skill = un subprocess Python."""
 
     def __init__(self, name: str, server_path: Path, cwd: Path,
-                 timeout_sec: float = 30.0, max_restart: int = 3):
+                 timeout_sec: float = 30.0, max_restart: int = 3,
+                 startup_timeout_sec: float | None = None):
         self.name = name
         self.server_path = server_path
         self.cwd = cwd
         self.timeout_sec = timeout_sec
+        # Démarrage (handshake) : plus tolérant que les appels d'outils.
+        self.startup_timeout_sec = startup_timeout_sec or max(timeout_sec, 120.0)
         self.max_restart = max_restart
 
         self.proc: Optional[asyncio.subprocess.Process] = None
@@ -76,8 +84,10 @@ class MCPClient:
                 await self._request("initialize",
                                     {"protocolVersion": "0.1",
                                      "clientInfo": {"name": "africaisoft-studio",
-                                                    "version": "0.3.0"}})
-                res = await self._request("tools/list", {})
+                                                    "version": "0.3.0"}},
+                                    timeout=self.startup_timeout_sec)
+                res = await self._request("tools/list", {},
+                                          timeout=self.startup_timeout_sec)
                 self.tools = res.get("tools", [])
                 self.status = "running"
                 logger.info("MCP skill '%s' prêt (%d outils).",
@@ -145,7 +155,8 @@ class MCPClient:
         }
 
     # ── Interne ──────────────────────────────────────────────────────────────
-    async def _request(self, method: str, params: dict) -> Any:
+    async def _request(self, method: str, params: dict,
+                       timeout: float | None = None) -> Any:
         assert self.proc and self.proc.stdin
         self._id_counter += 1
         req_id = self._id_counter
@@ -161,11 +172,11 @@ class MCPClient:
             self._pending.pop(req_id, None)
             raise MCPError({"code": -32603, "message": f"stdin write: {e}"})
         try:
-            resp = await asyncio.wait_for(fut, timeout=self.timeout_sec)
+            resp = await asyncio.wait_for(fut, timeout=timeout or self.timeout_sec)
         except asyncio.TimeoutError:
             self._pending.pop(req_id, None)
             raise MCPError({"code": -32000,
-                            "message": f"timeout {self.timeout_sec}s sur {method}"})
+                            "message": f"timeout {timeout or self.timeout_sec}s sur {method}"})
         if "error" in resp:
             raise MCPError(resp["error"])
         return resp.get("result", {})

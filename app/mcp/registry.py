@@ -4,6 +4,10 @@ Rôle    : registre MCP - découverte automatique des skills sous mcp-servers/,
 Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
+Version : 1.0.5 (2026-09-25) — spawn PARALLÈLE des skills (au lieu de séquentiel) :
+          5 skills × 30 s en série faisaient dépasser plusieurs minutes et
+          chaque handshake était plafonné à 30 s. En parallèle, le coût de
+          démarrage se recouvre et le cache disque se réchauffe une seule fois.
 """
 from __future__ import annotations
 
@@ -39,8 +43,11 @@ class MCPRegistry:
 
         entries = _discover_skills()
         skill_timeout = float(self._config.get("skill_timeout_sec", 30))
+        startup_timeout = float(self._config.get("startup_timeout_sec", 120))
         max_restart = int(self._config.get("max_restart_attempts", 3))
 
+        # Construit un client par skill activé (server.py présent).
+        pending: list[MCPClient] = []
         spawned, failed = [], []
         for entry in entries:
             if not entry.get("enabled", True):
@@ -50,24 +57,28 @@ class MCPRegistry:
             if not server.exists():
                 failed.append({"name": name, "reason": f"server.py absent: {server}"})
                 continue
-
-            client = MCPClient(
+            pending.append(MCPClient(
                 name=name,
                 server_path=server,
                 cwd=server.parent,
                 timeout_sec=skill_timeout,
                 max_restart=max_restart,
-            )
-            try:
-                await client.start()
-                self.clients[name] = client
-                spawned.append({"name": name,
+                startup_timeout_sec=startup_timeout,
+            ))
+
+        # Démarrage PARALLÈLE : le coût de spawn (Python embarqué depuis clé USB,
+        # scan antivirus) se recouvre au lieu de s'additionner.
+        results = await asyncio.gather(
+            *[c.start() for c in pending], return_exceptions=True)
+
+        for client, res in zip(pending, results):
+            self.clients[client.name] = client  # gardé pour visibilité même si KO
+            if isinstance(res, Exception):
+                logger.warning("MCP '%s' KO au démarrage : %s", client.name, res)
+                failed.append({"name": client.name, "reason": str(res)})
+            else:
+                spawned.append({"name": client.name,
                                 "tools": [t["name"] for t in client.tools]})
-            except Exception as e:  # noqa: BLE001
-                logger.warning("MCP '%s' KO au démarrage : %s", name, e)
-                # On garde le client en registre (status=unavailable) pour visibilité.
-                self.clients[name] = client
-                failed.append({"name": name, "reason": str(e)})
 
         logger.info("MCP: %d skill(s) OK, %d KO", len(spawned), len(failed))
         return {"enabled": True, "spawned": spawned, "failed": failed}
@@ -122,6 +133,7 @@ def _load_mcp_config() -> dict:
         "enabled": True,
         "auto_discover": True,
         "skill_timeout_sec": 30,
+        "startup_timeout_sec": 120,
         "spawn_wait_sec": 5,
         "max_restart_attempts": 3,
     }
