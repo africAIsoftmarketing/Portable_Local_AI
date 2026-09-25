@@ -7,6 +7,7 @@ Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
 """
+import asyncio
 import logging
 import os
 import signal
@@ -87,16 +88,31 @@ async def lifespan(app: FastAPI):
             # On continue quand même : /health signalera l'état dégradé.
 
     # Registre MCP - découverte + spawn des skills après llama.
+    # 1.0.6 : démarrage en ARRIÈRE-PLAN — le studio (UI + chat) est servi
+    # immédiatement ; les skills s'allument au fil de l'eau (/skills).
+    # STUDIO_MCP_BLOCKING=1 rétablit l'attente synchrone (tests, CI).
     registry = MCPRegistry()
     app.state.mcp = registry
+    app.state.mcp_task = None
     if settings.mcp.enabled and os.environ.get("STUDIO_SKIP_MCP", "0") != "1":
-        try:
-            report = await registry.start_all()
-            logger.info("MCP : %d skill(s) spawned, %d KO",
-                        len(report.get("spawned", [])),
-                        len(report.get("failed", [])))
-        except Exception as e:  # noqa: BLE001
-            logger.error("MCP registry startup failed: %s", e)
+        async def _start_mcp():
+            try:
+                report = await registry.start_all()
+                logger.info("MCP : %d skill(s) spawned, %d KO",
+                            len(report.get("spawned", [])),
+                            len(report.get("failed", [])))
+            except Exception as e:  # noqa: BLE001
+                logger.error("MCP registry startup failed: %s", e)
+            finally:
+                registry.ready.set()
+
+        if os.environ.get("STUDIO_MCP_BLOCKING", "0") == "1":
+            await _start_mcp()
+        else:
+            app.state.mcp_task = asyncio.create_task(_start_mcp())
+            logger.info("MCP : démarrage des skills en arrière-plan.")
+    else:
+        registry.ready.set()
 
     # Handler signaux explicite (uvicorn le fait déjà mais on sécurise)
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -110,6 +126,9 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     logger.info("=== Arrêt en cours ===")
+    task = getattr(app.state, "mcp_task", None)
+    if task is not None and not task.done():
+        task.cancel()
     if getattr(app.state, "mcp", None):
         try:
             await app.state.mcp.stop_all()
@@ -128,7 +147,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AfricAIsoft Portable Studio",
         description="Distribution portable USB 100% offline — API OpenAI-compatible + skills MCP + UI FR/EN.",
-        version="1.0.5",
+        version="1.0.6",
         lifespan=lifespan,
         openapi_url=f"{API_PREFIX}/openapi.json" if API_PREFIX else "/openapi.json",
         docs_url=f"{API_PREFIX}/docs" if API_PREFIX else "/docs",
@@ -160,7 +179,7 @@ def create_app() -> FastAPI:
         )
         return {
             "status": "ok",
-            "version": "1.0.5",
+            "version": "1.0.6",
             "platform": st.platform,
             "backend": st.backend,
             "components": {
