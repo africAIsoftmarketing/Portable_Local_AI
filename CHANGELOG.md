@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## [1.0.6] Code lisible, fichiers joints au chat, skills MCP robustes — 2026-09-25
+
+### Corrigé
+- **Code et JSON « aplatis » dans le chat** : dans un bloc de code de
+  plusieurs lignes, seules la première et la dernière ligne restaient dans
+  le bloc ; les lignes du milieu étaient fusionnées en un paragraphe. Le
+  renderer Markdown (`ui/assets/markdown.js` 1.1.0) extrait désormais les
+  blocs avant le traitement ligne à ligne. Aussi : bloc non fermé rendu
+  comme code pendant le streaming, fins de ligne CRLF, `~~~`, langages
+  `c++`/`c#`, JSON nu détecté et indenté, code inline protégé de l'italique,
+  sauts de ligne conservés, tableaux, citations, titres 1-6, bouton
+  **Copier** sur chaque bloc. Liens limités à http(s)/mailto/relatifs.
+- **Skills MCP muets 120 s sur la clé Windows** : le diagnostic de la 1.0.5
+  (lenteur de démarrage) était incomplet — `general`, qui n'a presque aucun
+  code, ne répondait pas non plus. Le transport par pipes asyncio est
+  remplacé par `subprocess.Popen` + threads lecteurs, indépendant de la
+  boucle asyncio (`app/mcp/client.py`). Enfant lancé en UTF-8 forcé, sans
+  fenêtre console, sans écriture de `__pycache__` sur la clé.
+- **Échecs MCP muets** : la fin du stderr d'un skill est jointe à l'erreur
+  (visible dans `/skills`) et journalisée en WARNING.
+- **Trace ASGI « skill 'rag' indisponible »** au clic sur « Réindexer » :
+  réponse HTTP 503 explicite, message affiché dans le panneau RAG.
+- Futures orphelines (« Future exception was never retrieved ») à l'arrêt
+  pendant le démarrage des skills.
+
+### Ajouté
+- **Joindre des fichiers à la conversation** (bouton 📎 ou glisser-déposer) :
+  txt, md, pdf et fichiers texte/code (csv, json, py, cbl…, convertis en
+  `.txt`), 20 Mo max. Les fichiers alimentent la base RAG
+  (`POST /skills/rag/upload`) et les passages pertinents sont **injectés
+  dans le prompt système** à chaque question de la conversation (champ
+  propriétaire `rag` de `/v1/chat/completions`, retiré avant llama-server).
+  La recherche BM25 tourne dans l'orchestrateur (`app/rag/local_search.py`,
+  même code que le skill RAG) : ça fonctionne même si les skills MCP sont
+  indisponibles et avec un petit modèle qui ne sait pas appeler d'outils.
+  Les pièces jointes sont mémorisées avec la conversation.
+- `scripts/mcp-selftest.bat` : diagnostic des skills sur la clé (temps de
+  handshake avec les deux transports + stderr).
+- `pypdf` (pur Python) dans `app/requirements.txt` : extraction PDF réelle.
+
+### Modifié
+- Démarrage MCP **en arrière-plan** : le studio est servi dès que
+  llama-server est prêt, les skills s'allument au fil de l'eau (l'UI se
+  rafraîchit tant qu'un skill est « démarrage »). `STUDIO_MCP_BLOCKING=1`
+  rétablit l'attente synchrone.
+- Un skill « indisponible » est relancé à la demande (budget
+  `max_restart_attempts`), plus seulement un skill « planté ».
+- Prompt système par défaut : code/JSON toujours en blocs délimités avec le
+  langage ; ni mots ni caractères d'une autre langue que le français ou
+  l'anglais (les petits modèles Qwen glissent parfois vers le chinois).
+  Sans effet si un prompt personnalisé ou un preset est actif.
+
 ## [1.0.5] Skills MCP fiables sur clé USB — 2026-09-25
 
 ### Corrigé
