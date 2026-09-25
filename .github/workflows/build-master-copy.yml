@@ -20,6 +20,12 @@
 #     llama-server ; seul le pilote NVIDIA est requis sur le poste cible.
 #   - Backend ROCm exclu (aucun runner GitHub-hosted avec toolkit). Voir
 #     `scripts/build-llama-server.sh rocm` pour la procédure locale.
+#   - llama-server compilé SANS OpenSSL (-DLLAMA_OPENSSL=OFF) : l'option est
+#     active par défaut depuis le passage de llama.cpp à cpp-httplib, et le
+#     runner Windows fournit OpenSSL → llama-server.exe exigeait
+#     libssl-3-x64.dll, absente des postes clients. HTTPS ne sert qu'au
+#     téléchargement de modèles (-hf) : inutile sur une clé hors ligne.
+#     Garde-fou : la release échoue si un binaire référence encore OpenSSL.
 #   - GITHUB_TOKEN automatique uniquement ; aucun secret custom requis.
 # Auteur  : AfricAIsoft — Licence : MIT
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,7 +140,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           cmake -B build -S . `
             -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_AVX=ON `
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON `
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON `
             -DCMAKE_BUILD_TYPE=Release
           if ($LASTEXITCODE -ne 0) { throw "cmake configure a échoué" }
           cmake --build build --config Release --target llama-server --parallel
@@ -205,7 +211,7 @@ jobs:
             -G "Visual Studio 17 2022" -A x64 `
             -DGGML_CUDA=ON `
             -DCMAKE_CUDA_COMPILER="$env:CUDA_PATH\bin\nvcc.exe" `
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON `
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON `
             -DCMAKE_BUILD_TYPE=Release
           if ($LASTEXITCODE -ne 0) { throw "cmake configure a échoué" }
           cmake --build build --config Release --target llama-server --parallel
@@ -277,7 +283,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           cmake -B build -S . `
             -DGGML_VULKAN=ON `
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON `
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON `
             -DCMAKE_BUILD_TYPE=Release
           if ($LASTEXITCODE -ne 0) { throw "cmake configure a échoué" }
           cmake --build build --config Release --target llama-server --parallel
@@ -365,7 +371,7 @@ jobs:
         run: |
           cmake -B build -S . \
             -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel
 
@@ -403,7 +409,7 @@ jobs:
         run: |
           cmake -B build -S . \
             -DGGML_METAL=OFF -DGGML_ACCELERATE=OFF -DGGML_NATIVE=OFF \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel
 
@@ -443,7 +449,7 @@ jobs:
         run: |
           cmake -B build -S . \
             -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel
 
@@ -482,7 +488,7 @@ jobs:
           cmake -B build -S . \
             -DGGML_METAL=OFF -DGGML_ACCELERATE=OFF \
             -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_AVX=ON \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel
 
@@ -524,7 +530,7 @@ jobs:
         run: |
           cmake -B build -S . \
             -DGGML_NATIVE=OFF -DGGML_AVX2=ON -DGGML_AVX=ON \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel 2
 
@@ -568,7 +574,7 @@ jobs:
         run: |
           cmake -B build -S . \
             -DGGML_CUDA=ON \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel 2
 
@@ -631,7 +637,7 @@ jobs:
         run: |
           cmake -B build -S . \
             -DGGML_VULKAN=ON \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel 2
 
@@ -679,7 +685,7 @@ jobs:
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
             -DGGML_NATIVE=OFF \
-            -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_CURL=OFF -DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release --target llama-server --parallel 2
 
@@ -806,6 +812,15 @@ jobs:
                "${PKG}/bin/darwin-arm64" "${PKG}/bin/darwin-x86_64" \
                -type f ! -name "*.so*" ! -name "*.dylib" -exec chmod +x {} +
           find "${PKG}" -maxdepth 2 -type f \( -name "*.sh" -o -name "*.command" \) -exec chmod +x {} +
+          # Garde-fou : aucune dépendance OpenSSL dans les backends (hors python/).
+          ssl_refs="$(find "${PKG}/bin" -path "*/python" -prune -o -type f -print0 \
+                      | xargs -0 -r grep -a -l -E "libssl|libcrypto" 2>/dev/null || true)"
+          if [ -n "${ssl_refs}" ]; then
+            echo "::error::Binaires liés à OpenSSL (DLL/so/dylib absentes des postes clients) :"
+            echo "${ssl_refs}"
+            exit 1
+          fi
+          echo "✓ Aucune dépendance OpenSSL dans les backends llama-server"
 
       - name: Télécharge les runtimes Python embarqués
         shell: bash
