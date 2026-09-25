@@ -4,7 +4,12 @@ Rôle    : registre MCP - découverte automatique des skills sous mcp-servers/,
 Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
-Version : 1.0.5 (2026-09-25) — spawn PARALLÈLE des skills (au lieu de séquentiel) :
+Version : 1.0.6 (2026-09-25) — les clients sont inscrits (état « starting »)
+          AVANT le handshake : le démarrage peut tourner en arrière-plan
+          (main.py) et l'UI voit les skills s'allumer au fil de l'eau.
+          `ready` (asyncio.Event) signale la fin du démarrage. Un server.py
+          absent est désormais journalisé.
+          1.0.5 (2026-09-25) — spawn PARALLÈLE des skills (au lieu de séquentiel) :
           5 skills × 30 s en série faisaient dépasser plusieurs minutes et
           chaque handshake était plafonné à 30 s. En parallèle, le coût de
           démarrage se recouvre et le cache disque se réchauffe une seule fois.
@@ -29,6 +34,8 @@ class MCPRegistry:
     def __init__(self):
         self.clients: dict[str, MCPClient] = {}
         self._config: dict = {}
+        self.ready = asyncio.Event()
+        self.last_report: dict = {}
 
     @property
     def enabled(self) -> bool:
@@ -39,7 +46,9 @@ class MCPRegistry:
         self._config = _load_mcp_config()
         if not self.enabled:
             logger.info("MCP désactivé via config/mcp.json.")
-            return {"enabled": False, "spawned": [], "failed": []}
+            self.last_report = {"enabled": False, "spawned": [], "failed": []}
+            self.ready.set()
+            return self.last_report
 
         entries = _discover_skills()
         skill_timeout = float(self._config.get("skill_timeout_sec", 30))
@@ -55,16 +64,20 @@ class MCPRegistry:
             name = entry["name"]
             server = STUDIO_ROOT / entry["path"] / "server.py"
             if not server.exists():
+                logger.warning("MCP '%s' ignoré : server.py absent (%s)", name, server)
                 failed.append({"name": name, "reason": f"server.py absent: {server}"})
                 continue
-            pending.append(MCPClient(
+            client = MCPClient(
                 name=name,
                 server_path=server,
                 cwd=server.parent,
                 timeout_sec=skill_timeout,
                 max_restart=max_restart,
                 startup_timeout_sec=startup_timeout,
-            ))
+            )
+            client.status = "starting"
+            self.clients[name] = client  # visible dans /skills dès maintenant
+            pending.append(client)
 
         # Démarrage PARALLÈLE : le coût de spawn (Python embarqué depuis clé USB,
         # scan antivirus) se recouvre au lieu de s'additionner.
@@ -72,8 +85,7 @@ class MCPRegistry:
             *[c.start() for c in pending], return_exceptions=True)
 
         for client, res in zip(pending, results):
-            self.clients[client.name] = client  # gardé pour visibilité même si KO
-            if isinstance(res, Exception):
+            if isinstance(res, BaseException):
                 logger.warning("MCP '%s' KO au démarrage : %s", client.name, res)
                 failed.append({"name": client.name, "reason": str(res)})
             else:
@@ -81,7 +93,9 @@ class MCPRegistry:
                                 "tools": [t["name"] for t in client.tools]})
 
         logger.info("MCP: %d skill(s) OK, %d KO", len(spawned), len(failed))
-        return {"enabled": True, "spawned": spawned, "failed": failed}
+        self.last_report = {"enabled": True, "spawned": spawned, "failed": failed}
+        self.ready.set()
+        return self.last_report
 
     async def stop_all(self) -> None:
         await asyncio.gather(*[c.stop() for c in self.clients.values()],
