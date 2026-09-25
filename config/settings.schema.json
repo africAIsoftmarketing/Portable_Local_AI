@@ -111,6 +111,10 @@
         "default_language": {"enum": ["fr", "en"]},
         "theme": {"enum": ["auto", "light", "dark"]}
       }
-    }
+    },
+    "version": {"type": ["string", "null"], "description": "Version du build de la clé (écrite par le Key Builder)."},
+    "client_id": {"type": ["string", "null"], "description": "Identifiant client saisi à la fabrication de la clé."},
+    "serial_number": {"type": ["string", "null"], "description": "UUID de la clé, identique à marker.json."},
+    "disabled_features": {"type": "array", "items": {"type": "string"}, "description": "Fonctionnalités désactivées à la fabrication de la clé."}
   }
 }
