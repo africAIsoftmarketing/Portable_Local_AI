@@ -6,12 +6,18 @@ Rôle    : skill MCP rag. 2 outils :
 Auteur  : AfricAIsoft
 Licence : MIT
 Date    : 2026-08-24
+Version : 1.0.4 (2026-09-24) — l'indexation de démarrage tourne en arrière-plan :
+          le serveur répond immédiatement à initialize / tools/list au lieu
+          de dépasser le délai de 30 s de l'orchestrateur sur une clé USB lente
+          (« MCP 'rag' KO au démarrage »). Une recherche lancée pendant
+          l'indexation attend simplement sa fin.
 """
 from __future__ import annotations
 
 import json
 import pickle
 import sys
+import threading
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
@@ -89,10 +95,38 @@ def _load_index():
     return bm, d["passages"]
 
 
-# Indexation au premier chargement du skill (avant que MCP boot ne démarre).
-if _needs_reindex():
-    _build_index()
-_BM25, _PASSAGES = _load_index()
+# Index en mémoire, protégé par un verrou : l'indexation de démarrage
+# (arrière-plan) et les appels d'outils ne se chevauchent jamais.
+_BM25 = None
+_PASSAGES: list = []
+_LOADED = False
+_INDEX_LOCK = threading.Lock()
+
+
+def _refresh_index(force: bool = False) -> dict:
+    """(Re)construit l'index si nécessaire puis le charge. Thread-safe."""
+    global _BM25, _PASSAGES, _LOADED
+    with _INDEX_LOCK:
+        info: dict = {}
+        rebuilt = False
+        if force or _needs_reindex():
+            info = _build_index()
+            rebuilt = True
+        if rebuilt or not _LOADED:
+            _BM25, _PASSAGES = _load_index()
+            _LOADED = True
+        return info
+
+
+def _warmup() -> None:
+    """Indexation de démarrage, hors du fil MCP (stdout réservé au protocole)."""
+    try:
+        _refresh_index()
+    except Exception as e:  # noqa: BLE001 — la recherche retentera l'indexation
+        print(f"[rag] indexation de démarrage échouée : {e}", file=sys.stderr, flush=True)
+
+
+threading.Thread(target=_warmup, name="rag-warmup", daemon=True).start()
 
 
 @server.tool(
@@ -108,10 +142,7 @@ _BM25, _PASSAGES = _load_index()
     },
 )
 def search_knowledge_base(args: dict) -> dict:
-    global _BM25, _PASSAGES
-    if _needs_reindex():
-        _build_index()
-        _BM25, _PASSAGES = _load_index()
+    _refresh_index()   # attend la fin de l'indexation de démarrage si besoin
     if _BM25 is None or not _PASSAGES:
         return {"results": [], "note": "Base de connaissances vide - ajouter des documents dans knowledge/documents/"}
 
@@ -136,9 +167,7 @@ def search_knowledge_base(args: dict) -> dict:
     input_schema={"type": "object", "properties": {}},
 )
 def reindex_knowledge_base(args: dict) -> dict:
-    global _BM25, _PASSAGES
-    info = _build_index()
-    _BM25, _PASSAGES = _load_index()
+    info = _refresh_index(force=True)
     return {"status": "ok", "passages_indexed": info.get("N", 0),
             "documents_dir": str(DOCS_DIR)}
 
