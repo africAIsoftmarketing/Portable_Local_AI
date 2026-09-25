@@ -31,6 +31,16 @@
         "delete": "Supprimer la conversation",
         "welcome": "Bienvenue. Sélectionnez ou créez une conversation pour commencer.",
         "toolsCount": "outil(s)",
+        "copy": "Copier",
+        "copied": "Copié ✓",
+        "attach": "Joindre des fichiers à la conversation (base de connaissances)",
+        "attachUploading": "Envoi de {n} fichier(s)…",
+        "attachDone": "📎 {name} ajouté à la base de connaissances ({n} passage(s)). Il sera utilisé pour répondre dans cette conversation.",
+        "attachEmpty": "Aucun texte n'a pu être extrait de {name} (PDF scanné ou image ?).",
+        "attachError": "Échec de l'ajout de {name} : {msg}",
+        "attachRemove": "Ne plus utiliser ce fichier dans cette conversation",
+        "attachTooBig": "fichier trop volumineux (20 Mo max)",
+        "dropHint": "Déposez vos fichiers ici pour les joindre à la conversation",
         "traceToggle": "Trace agentique",
         "trace": {
             "round":         "Round",
@@ -68,7 +78,7 @@
         "docsCount":  "document(s) indexé(s)",
         "indexAge":   "Index mis à jour :",
         "noDocs":     "Aucun document indexé.",
-        "dropHere":   "Ajoutez des fichiers .txt / .md / .pdf dans mcp-servers/rag/knowledge/documents/"
+        "dropHere":   "Joignez des fichiers avec le bouton 📎 du chat (txt, md, pdf, csv, json, code…) ou déposez-les dans mcp-servers/rag/knowledge/documents/"
     },
 
     "models": {

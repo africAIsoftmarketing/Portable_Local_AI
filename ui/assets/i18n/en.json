@@ -31,6 +31,16 @@
         "delete": "Delete conversation",
         "welcome": "Welcome. Select or create a conversation to begin.",
         "toolsCount": "tool(s)",
+        "copy": "Copy",
+        "copied": "Copied ✓",
+        "attach": "Attach files to the conversation (knowledge base)",
+        "attachUploading": "Uploading {n} file(s)…",
+        "attachDone": "📎 {name} added to the knowledge base ({n} passage(s)). It will be used to answer in this conversation.",
+        "attachEmpty": "No text could be extracted from {name} (scanned PDF or image?).",
+        "attachError": "Could not add {name}: {msg}",
+        "attachRemove": "Stop using this file in this conversation",
+        "attachTooBig": "file too large (20 MB max)",
+        "dropHint": "Drop your files here to attach them to the conversation",
         "traceToggle": "Agentic trace",
         "trace": {
             "round":         "Round",
@@ -68,7 +78,7 @@
         "docsCount":  "document(s) indexed",
         "indexAge":   "Index updated:",
         "noDocs":     "No documents indexed.",
-        "dropHere":   "Drop .txt / .md / .pdf files into mcp-servers/rag/knowledge/documents/"
+        "dropHere":   "Attach files with the 📎 button in the chat (txt, md, pdf, csv, json, code…) or drop them into mcp-servers/rag/knowledge/documents/"
     },
 
     "models": {
