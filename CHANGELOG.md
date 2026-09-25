@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [1.0.4] llama-server autonome sous Windows — 2026-09-24
+
+### Corrigé
+- **`llama-server.exe` refusait de démarrer** (« libssl-3-x64.dll est
+  introuvable ») : depuis le passage de llama.cpp à cpp-httplib, l'option
+  `LLAMA_OPENSSL` est active par défaut et `-DLLAMA_CURL=OFF` est ignoré ;
+  le runner Windows fournissant OpenSSL, le binaire s'y liait
+  dynamiquement. Toutes les compilations passent désormais
+  `-DLLAMA_OPENSSL=OFF` (HTTPS ne sert qu'au téléchargement de modèles,
+  inutile sur une clé hors ligne). La même dépendance menaçait macOS
+  (OpenSSL Homebrew) et Linux.
+- **Garde-fou de release** : le workflow échoue si un binaire des
+  backends référence encore OpenSSL.
+- **Skill MCP `rag` indisponible au démarrage** (« timeout 30.0s sur
+  tools/list ») : l'indexation de la base de connaissances tourne en
+  arrière-plan ; le serveur répond immédiatement (0,04 s au lieu de
+  plusieurs secondes, voire plus de 30 s sur clé USB).
+- `config/settings.schema.json` aligné sur le schéma de la 1.0.3
+  (métadonnées de la clé).
+
 ## [1.0.3] Clé USB Windows démarrable en un double-clic — 2026-09-24
 
 ### Corrigé
