@@ -314,6 +314,40 @@ body.booting::after {
 .msg-assistant .md a { color: var(--accent); text-decoration: underline; }
 .msg-assistant .md strong { font-weight: 600; }
 .msg-assistant .md em { font-style: italic; }
+/* 1.0.6 — blocs de code avec en-tête + bouton Copier, tableaux, citations. */
+.msg-assistant .md .code-block {
+    margin: 8px 0; border: 1px solid var(--border-soft); border-radius: 6px;
+    overflow: hidden; background: var(--bg);
+}
+.msg-assistant .md .code-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 8px 4px 12px; border-bottom: 1px solid var(--border-soft);
+    font-family: var(--mono); font-size: 11px; color: var(--ink-mute);
+}
+.msg-assistant .md .code-copy {
+    font-family: var(--mono); font-size: 11px; cursor: pointer;
+    background: transparent; color: var(--ink-mute);
+    border: 1px solid var(--border-soft); border-radius: 4px; padding: 2px 8px;
+}
+.msg-assistant .md .code-copy:hover { color: var(--accent); border-color: var(--accent); }
+.msg-assistant .md .code-block pre {
+    margin: 0; border: 0; border-radius: 0; white-space: pre; tab-size: 4;
+}
+.msg-assistant .md pre code { font-size: 12.5px; line-height: 1.5; }
+.msg-assistant .md h4, .msg-assistant .md h5, .msg-assistant .md h6 { font-size: 14px; margin: 10px 0 4px; }
+.msg-assistant .md blockquote {
+    margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--accent);
+    color: var(--ink-mute);
+}
+.msg-assistant .md hr { border: 0; border-top: 1px solid var(--border-soft); margin: 10px 0; }
+.msg-assistant .md del { opacity: .7; }
+.msg-assistant .md .table-wrap { overflow-x: auto; margin: 8px 0; }
+.msg-assistant .md table { border-collapse: collapse; font-size: 14px; }
+.msg-assistant .md th, .msg-assistant .md td {
+    border: 1px solid var(--border-soft); padding: 4px 10px; text-align: left; vertical-align: top;
+}
+.msg-assistant .md th { font-weight: 600; background: rgba(0,0,0,.03); }
+:root[data-theme="dark"] .msg-assistant .md th { background: rgba(255,255,255,.05); }
 
 /* Trace agentique repliable */
 .trace-block {
@@ -377,6 +411,51 @@ body.booting::after {
 }
 .send-btn:hover:not(:disabled) { transform: translateY(-1px); }
 .send-btn:disabled { opacity: .5; cursor: not-allowed; }
+/* 1.0.6 — pièces jointes (RAG) */
+.composer { align-items: stretch; }
+.composer-main { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.composer-main textarea { flex: 1 1 auto; }
+.attach-btn {
+    background: var(--bg-input); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 0 14px; font-size: 18px; cursor: pointer;
+    transition: border-color 120ms, color 120ms;
+}
+.attach-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.attach-btn:disabled { opacity: .5; cursor: progress; }
+.attach-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.attach-chip {
+    display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+    font-family: var(--mono); font-size: 11px; color: var(--ink);
+    background: var(--bg-input); border: 1px solid var(--border-soft);
+    border-radius: 999px; padding: 3px 6px 3px 10px;
+}
+.attach-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach-chip.pending { border-color: var(--accent); }
+.attach-chip.busy { opacity: .6; }
+.attach-chip button {
+    background: transparent; border: 0; cursor: pointer; color: var(--ink-mute);
+    font-size: 12px; line-height: 1; padding: 0 2px;
+}
+.attach-chip button:hover { color: var(--accent); }
+.msg-user .msg-attachments { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.msg-user .msg-attachments span {
+    font-family: var(--mono); font-size: 11px; opacity: .85;
+    border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px;
+}
+.msg-note {
+    align-self: center; font-family: var(--mono); font-size: 11px;
+    color: var(--ink-mute); padding: 4px 10px; margin: 2px 0;
+}
+.msg-note.error { color: var(--danger, #b3261e); }
+.chat-panel { position: relative; }
+.drop-overlay {
+    position: absolute; inset: 0; z-index: 20; display: flex;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(0,0,0,.06); border: 2px dashed var(--accent);
+    border-radius: 12px; font-family: var(--serif); font-size: 18px; color: var(--accent);
+}
+.drop-overlay[hidden] { display: none; }
 
 /* ─────────────────────────────────────────────────── RIGHT PANEL */
 .right-panel {
@@ -588,3 +667,5 @@ button.secondary:hover:not(:disabled) { background: var(--accent-glow); }
     color: var(--accent);
 }
 @keyframes blink { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+/* 1.0.6 — une réponse qui contient du code ou un tableau prend toute la largeur utile. */
+.msg-assistant:has(.code-block), .msg-assistant:has(.table-wrap) { width: 82%; }

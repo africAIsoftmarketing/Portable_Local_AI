@@ -30,6 +30,11 @@
         activeModel: null,
         activePreset: null,
         systemPromptLocked: false,
+        // 1.0.6 — fichiers joints (RAG) : actifs pour la conversation courante
+        // et « en attente » (joints depuis le dernier envoi).
+        attachments: [],
+        pendingAttachments: [],
+        uploading: 0,
     };
 
     // Bloc utilitaires --------------------------------------------------------
@@ -105,6 +110,9 @@
         });
         if (state.translations.app && state.translations.app.title) {
             document.title = state.translations.app.title;
+        }
+        if (window.Markdown && Markdown.setLabels) {
+            Markdown.setLabels({copy: t("chat.copy")});
         }
     }
 
@@ -287,6 +295,14 @@
     function renderMessagesFromHistory(messages) {
         const box = $("#messages");
         box.innerHTML = "";
+        // Fichiers joints de la conversation = union des pièces des messages.
+        const att = [];
+        for (const m of messages) {
+            for (const a of (m.attachments || [])) if (!att.includes(a)) att.push(a);
+        }
+        state.attachments = att;
+        state.pendingAttachments = [];
+        renderAttachChips();
         if (!messages.length) {
             const w = document.createElement("div");
             w.className = "msg-hint"; w.textContent = t("chat.welcome");
@@ -294,7 +310,7 @@
             return;
         }
         for (const m of messages) {
-            if (m.role === "user") addUserBubble(m.content);
+            if (m.role === "user") addUserBubble(m.content, m.attachments);
             else if (m.role === "assistant") {
                 const d = addAssistantBubble();
                 d.querySelector(".md").innerHTML = Markdown.render(m.content || "");
@@ -302,10 +318,32 @@
             }
         }
     }
-    function addUserBubble(text) {
+    function addUserBubble(text, attachments) {
         const box = $("#messages");
+        const hint = box.querySelector(".msg-hint");
+        if (hint) hint.remove();
         const div = document.createElement("div");
         div.className = "msg msg-user"; div.textContent = text;
+        if (attachments && attachments.length) {
+            const wrap = document.createElement("div");
+            wrap.className = "msg-attachments";
+            for (const a of attachments) {
+                const sp = document.createElement("span");
+                sp.textContent = "\u{1F4CE} " + a;
+                wrap.appendChild(sp);
+            }
+            div.appendChild(wrap);
+        }
+        box.appendChild(div); box.scrollTop = box.scrollHeight;
+        return div;
+    }
+    function addNote(text, isError) {
+        const box = $("#messages");
+        const hint = box.querySelector(".msg-hint");
+        if (hint) hint.remove();
+        const div = document.createElement("div");
+        div.className = "msg-note" + (isError ? " error" : "");
+        div.textContent = text;
         box.appendChild(div); box.scrollTop = box.scrollHeight;
         return div;
     }
@@ -360,7 +398,10 @@
     // ── Envoi de messages ───────────────────────────────────────────────────
     async function sendMessage(text) {
         if (!text.trim()) return;
-        addUserBubble(text);
+        const newAttachments = state.pendingAttachments.slice();
+        state.pendingAttachments = [];
+        renderAttachChips();
+        addUserBubble(text, newAttachments);
         const assistantDiv = addAssistantBubble();
         const md = assistantDiv.querySelector(".md");
         md.innerHTML = '<span class="typing"></span>';
@@ -375,10 +416,11 @@
         try {
             const r = await api("/v1/chat/completions", {
                 method: "POST",
-                body: JSON.stringify({
+                body: JSON.stringify(Object.assign({
                     messages: hist, stream: true,
                     temperature: 0.6, max_tokens: 512,
-                }),
+                }, state.attachments.length
+                    ? {rag: {sources: state.attachments.slice()}} : {})),
             });
             if (!r.ok) throw new Error("HTTP " + r.status + ": " + await r.text());
             const contentType = r.headers.get("content-type") || "";
@@ -399,12 +441,19 @@
             const assistantMsg = {role: "assistant", content: fullText};
             const traceEl = assistantDiv.querySelector(".trace-events");
             if (traceEl) assistantMsg.trace = collectTraceFromDom(assistantDiv);
-            await appendMessagesToStore([{role: "user", content: text}, assistantMsg]);
+            const userMsg = {role: "user", content: text};
+            if (newAttachments.length) userMsg.attachments = newAttachments;
+            await appendMessagesToStore([userMsg, assistantMsg]);
             await refreshConversations();
             status.textContent = t("chat.idle");
         } catch (e) {
             assistantDiv.remove();
             addErrorBubble(e.message);
+            // Les pièces jointes non envoyées redeviennent « en attente ».
+            for (const a of newAttachments) {
+                if (!state.pendingAttachments.includes(a)) state.pendingAttachments.push(a);
+            }
+            renderAttachChips();
             status.textContent = t("chat.idle");
         } finally {
             $("#chat-send-btn").disabled = false;
@@ -444,6 +493,124 @@
     }
     function collectTraceFromDom() { return []; /* déjà attaché via attachTrace */ }
 
+    // ── Fichiers joints (RAG) ───────────────────────────────────────────────
+    function renderAttachChips() {
+        const box = $("#attach-chips");
+        if (!box) return;
+        box.innerHTML = "";
+        const all = state.attachments.map(n => ({name: n, pending: state.pendingAttachments.includes(n)}));
+        for (const a of all) {
+            const chip = document.createElement("span");
+            chip.className = "attach-chip" + (a.pending ? " pending" : "");
+            chip.setAttribute("data-testid", "attach-chip");
+            const nm = document.createElement("span");
+            nm.className = "chip-name"; nm.textContent = "\u{1F4CE} " + a.name; nm.title = a.name;
+            const rm = document.createElement("button");
+            rm.type = "button"; rm.textContent = "\u2715"; rm.title = t("chat.attachRemove");
+            rm.addEventListener("click", () => {
+                state.attachments = state.attachments.filter(x => x !== a.name);
+                state.pendingAttachments = state.pendingAttachments.filter(x => x !== a.name);
+                renderAttachChips();
+            });
+            chip.appendChild(nm); chip.appendChild(rm);
+            box.appendChild(chip);
+        }
+        if (state.uploading > 0) {
+            const busy = document.createElement("span");
+            busy.className = "attach-chip busy";
+            busy.textContent = t("chat.attachUploading", {n: state.uploading});
+            box.appendChild(busy);
+        }
+        box.hidden = !box.children.length;
+    }
+    function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => {
+                const s = String(fr.result || "");
+                resolve(s.slice(s.indexOf(",") + 1));
+            };
+            fr.onerror = () => reject(fr.error || new Error("lecture impossible"));
+            fr.readAsDataURL(file);
+        });
+    }
+    async function uploadFiles(files) {
+        if (!files.length) return;
+        const btn = $("#attach-btn");
+        btn.disabled = true;
+        state.uploading += files.length;
+        renderAttachChips();
+        let any = false;
+        for (const f of files) {
+            try {
+                if (f.size > 20 * 1024 * 1024) throw new Error(t("chat.attachTooBig"));
+                const b64 = await fileToBase64(f);
+                const r = await api("/skills/rag/upload", {
+                    method: "POST",
+                    body: JSON.stringify({filename: f.name, content_base64: b64}),
+                });
+                let d = {};
+                try { d = await r.json(); } catch (_) {}
+                if (!r.ok) {
+                    const det = d.detail;
+                    throw new Error((det && (det.message || (typeof det === "string" ? det : ""))) || ("HTTP " + r.status));
+                }
+                const name = d.stored_as;
+                if (!state.attachments.includes(name)) state.attachments.push(name);
+                if (!state.pendingAttachments.includes(name)) state.pendingAttachments.push(name);
+                addNote(t("chat.attachDone", {name: f.name, n: d.passages || 0}));
+                if (!d.passages) addNote(t("chat.attachEmpty", {name: f.name}), true);
+                any = true;
+            } catch (e) {
+                addNote(t("chat.attachError", {name: f.name, msg: e.message}), true);
+            } finally {
+                state.uploading--;
+                renderAttachChips();
+            }
+        }
+        btn.disabled = false;
+        if (any) refreshRagDocuments();
+        $("#chat-input").focus();
+    }
+    function setupDropZone() {
+        const panel = document.querySelector(".chat-panel");
+        const ov = $("#drop-overlay");
+        if (!panel || !ov) return;
+        let depth = 0;
+        const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+        panel.addEventListener("dragenter", e => { if (!hasFiles(e)) return; e.preventDefault(); depth++; ov.hidden = false; });
+        panel.addEventListener("dragover", e => { if (hasFiles(e)) e.preventDefault(); });
+        panel.addEventListener("dragleave", e => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) ov.hidden = true; });
+        panel.addEventListener("drop", e => {
+            if (!hasFiles(e)) return;
+            e.preventDefault(); depth = 0; ov.hidden = true;
+            uploadFiles(Array.from(e.dataTransfer.files || []));
+        });
+    }
+    function onCodeCopyClick(e) {
+        const btn = e.target.closest && e.target.closest("[data-md-copy]");
+        if (!btn) return;
+        const code = btn.closest(".code-block") && btn.closest(".code-block").querySelector("pre code");
+        if (!code) return;
+        const text = code.textContent;
+        const done = () => {
+            btn.textContent = t("chat.copied");
+            setTimeout(() => { btn.textContent = t("chat.copy"); }, 1500);
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done, () => legacyCopy(text) && done());
+        } else if (legacyCopy(text)) done();
+    }
+    function legacyCopy(text) {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch (_) {}
+        ta.remove();
+        return ok;
+    }
+
     // ── Skills / RAG ────────────────────────────────────────────────────────
     async function refreshSkills() {
         try {
@@ -477,6 +644,12 @@
                 <div class="skill-tools">${toolsHtml}</div>`;
             list.appendChild(card);
         }
+        // 1.0.6 : les skills démarrent en arrière-plan → on repasse tant
+        // qu'au moins un est en « starting ».
+        clearTimeout(state._skillsPoll);
+        if (state.skills.skills.some(sk => sk.status === "starting")) {
+            state._skillsPoll = setTimeout(refreshSkills, 3000);
+        }
     }
     async function refreshRagDocuments() {
         const listEl = $("#rag-documents");
@@ -508,11 +681,20 @@
         const original = btn.textContent;
         btn.textContent = t("rag.reindexing");
         try {
-            await api("/skills/rag/reindex", {method: "POST"});
+            const r = await api("/skills/rag/reindex", {method: "POST"});
+            if (!r.ok) {
+                let msg = "HTTP " + r.status;
+                try {
+                    const d = await r.json();
+                    msg = (d.detail && (d.detail.message || d.detail)) || msg;
+                } catch (_) {}
+                throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+            }
             btn.textContent = t("rag.reindexed");
             await refreshRagDocuments();
         } catch (e) {
             btn.textContent = t("errors.generic");
+            $("#rag-status").textContent = e.message;
         } finally {
             setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1200);
         }
@@ -803,6 +985,16 @@
                 $("#chat-form").dispatchEvent(new Event("submit", {cancelable: true}));
             }
         });
+
+        // 1.0.6 — pièces jointes + copie des blocs de code
+        $("#attach-btn").addEventListener("click", () => $("#attach-input").click());
+        $("#attach-input").addEventListener("change", e => {
+            const files = Array.from(e.target.files || []);
+            e.target.value = "";
+            uploadFiles(files);
+        });
+        setupDropZone();
+        $("#messages").addEventListener("click", onCodeCopyClick);
 
         // Right panel
         setupTabs();
