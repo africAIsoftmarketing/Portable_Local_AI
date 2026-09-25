@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## [1.0.5] Skills MCP fiables sur clé USB — 2026-09-25
+
+### Corrigé
+- **Skills MCP en échec au démarrage** (« timeout 30.0s sur initialize »
+  pour `general`, `terminal-skills-community`, etc.) : les skills étaient
+  démarrés **en série**, chaque handshake plafonné à 30 s. Sur clé USB, le
+  premier lancement du Python embarqué (lecture de la stdlib et de
+  site-packages, analyse antivirus des exécutables sur média amovible)
+  dépasse ce délai. Désormais :
+  - démarrage **parallèle** des skills (le coût de spawn se recouvre et le
+    cache disque se réchauffe une seule fois) ;
+  - **délai de démarrage distinct** du délai par appel (`startup_timeout_sec`,
+    120 s par défaut) : les appels d'outils au runtime gardent un délai court
+    (`skill_timeout_sec`, 30 s). Réglables dans `config/mcp.json`.
+  Mesuré : 4 skills lents passent de 16 s (série) à 4 s (parallèle), et un
+  handshake plus long que 30 s n'échoue plus au démarrage.
+
+### Note
+- Le blocage « libssl-3-x64.dll introuvable » est corrigé depuis la v1.0.4
+  (binaires vérifiés sans dépendance OpenSSL). Une clé qui affiche encore
+  cette erreur a été fabriquée à partir d'une release antérieure : la
+  refabriquer depuis la v1.0.5.
+
 ## [1.0.4] llama-server autonome sous Windows — 2026-09-24
 
 ### Corrigé
